@@ -15,6 +15,7 @@ private:
 
 	// Helper methods
 	std::string		getStatusMessage(int code) const;
+	std::string		getHttpDate() const;
 	void			setDefaultHeaders();
 
 public:

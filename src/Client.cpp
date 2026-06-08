@@ -44,7 +44,7 @@ ssize_t Client::read() {
 	char buffer[8192];
 	ssize_t bytes = ::recv(_fd, buffer, sizeof(buffer), 0);
 	if (bytes > 0) {
-		appendReadBuffer(std::string(buffer, static_cast<size_t>(bytes)));
+		_readBuffer.append(buffer, static_cast<size_t>(bytes));
 		_request.appendData(std::string(buffer, static_cast<size_t>(bytes)));
 		updateLastActivity();
 		return bytes;
@@ -58,14 +58,12 @@ ssize_t Client::write() {
 	if (_writeBuffer.empty())
 		return 0;
 
-	ssize_t bytes = ::send(_fd, _writeBuffer.c_str(), _writeBuffer.size(), 0);
+	ssize_t bytes = ::send(_fd, _writeBuffer.c_str(), _writeBuffer.size(), MSG_NOSIGNAL);
 	if (bytes > 0) {
 		_writeBuffer.erase(0, static_cast<size_t>(bytes));
 		updateLastActivity();
 		return bytes;
 	}
-	if (bytes == 0)
-		return 0;
 	return -1;
 }
 

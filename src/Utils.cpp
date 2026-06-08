@@ -258,8 +258,8 @@ namespace Utils {
 	std::string normalizePath(const std::string& path) 
 	{
 		std::vector<std::string> parts;
-    	std::istringstream ss(path);
-    	std::string token;
+     	std::istringstream ss(path);
+     	std::string token;
 
 		while (std::getline(ss, token, '/')) {
 			if (token == "" || token == ".")
@@ -271,6 +271,12 @@ namespace Utils {
 				parts.push_back(token);
 			}
 		}
+
+		std::string result;
+		for (size_t i = 0; i < parts.size(); ++i) {
+			result += "/" + parts[i];
+		}
+		return result.empty() ? "/" : result;
 	}
 
 	std::string joinPath(const std::string& path1, const std::string& path2) 

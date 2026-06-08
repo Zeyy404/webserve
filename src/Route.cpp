@@ -3,10 +3,10 @@
 #include <algorithm>
 
 // Orthodox Canonical Form
-Route::Route() : _path("/"), _autoindex(false) {
+Route::Route() : _path("/"), _autoindex(false), _redirectCode(301) {
 }
 
-Route::Route(const std::string& path) : _path(path), _autoindex(false) {
+Route::Route(const std::string& path) : _path(path), _autoindex(false), _redirectCode(301) {
 }
 
 Route::Route(const Route& other) {
@@ -21,6 +21,7 @@ Route& Route::operator=(const Route& other) {
 		_autoindex = other._autoindex;
 		_index = other._index;
 		_redirect = other._redirect;
+		_redirectCode = other._redirectCode;
 		_uploadPath = other._uploadPath;
 		_cgiExtensions = other._cgiExtensions;
 	}
@@ -55,6 +56,10 @@ void Route::setRedirect(const std::string& redirect) {
 	_redirect = redirect;
 }
 
+void Route::setRedirectCode(int code) {
+	_redirectCode = code;
+}
+
 void Route::setUploadPath(const std::string& path) {
 	_uploadPath = path;
 }
@@ -86,6 +91,10 @@ const std::vector<std::string>& Route::getIndex() const {
 
 const std::string& Route::getRedirect() const {
 	return _redirect;
+}
+
+int Route::getRedirectCode() const {
+	return _redirectCode;
 }
 
 const std::string& Route::getUploadPath() const {

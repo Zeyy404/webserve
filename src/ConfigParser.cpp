@@ -190,6 +190,9 @@ void ConfigParser::parseRouteDirective(const std::string& line, Route& route) {
 	} else if (tokens[0] == "upload_path" && tokens.size() >= 2) {
 		route.setUploadPath(tokens[1]);
 	} else if (tokens[0] == "return" && tokens.size() >= 3) {
+		int statusCode = std::atoi(tokens[1].c_str());
+		if (statusCode >= 300 && statusCode <= 399)
+			route.setRedirectCode(statusCode);
 		route.setRedirect(tokens[2]);
 	} else if (tokens[0] == "cgi_extension" && tokens.size() >= 3) {
 		route.addCgiExtension(tokens[1], tokens[2]);

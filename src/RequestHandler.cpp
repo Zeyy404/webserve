@@ -315,12 +315,16 @@ void RequestHandler::handleDelete() {
 		handleError(404);
 		return;
 	}
+	if (isDirectory(filePath)) {
+		handleError(403);
+		return;
+	}
 	if (!isRegularFile(filePath)) {
 		handleError(403);
 		return;
 	}
 	if (::unlink(filePath.c_str()) != 0) {
-		handleError(500);
+		handleError(403);
 		return;
 	}
 	_response.setStatusCode(204);
@@ -378,10 +382,13 @@ void RequestHandler::generateDirectoryListing(const std::string& path) {
 }
 
 void RequestHandler::handleRedirect(const std::string& location) {
-	_response.setStatusCode(301);
+	int code = (_route != NULL) ? _route->getRedirectCode() : 301;
+	_response.setStatusCode(code);
 	_response.setLocation(location);
 	_response.setContentType("text/html");
-	_response.setBody("<html><body><h1>301 Moved Permanently</h1></body></html>");
+	std::ostringstream oss;
+	oss << "<html><body><h1>" << code << " " << _response.getStatusMessage() << "</h1></body></html>";
+	_response.setBody(oss.str());
 }
 
 void RequestHandler::handleCgi() {
@@ -493,6 +500,18 @@ bool RequestHandler::isAllowedMethod(const std::string& method) {
 // Error handling
 void RequestHandler::handleError(int statusCode) {
 	_response.setStatusCode(statusCode);
+	if (statusCode == 405 && _route != NULL) {
+		const std::vector<std::string>& methods = _route->getAllowedMethods();
+		if (!methods.empty()) {
+			std::string allowed;
+			for (size_t i = 0; i < methods.size(); ++i) {
+				if (i > 0)
+					allowed += ", ";
+				allowed += methods[i];
+			}
+			_response.addHeader("Allow", allowed);
+		}
+	}
 	sendErrorPage(statusCode);
 }
 

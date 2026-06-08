@@ -57,16 +57,16 @@ This checklist tracks only mandatory requirements (no bonus scope).
 ### Core HTTP correctness
 
 - [x] Strict request validation (malformed request line/headers -> `400`)
-- [ ] Correct header validation rules for HTTP/1.1 (duplicate header policy and full invalid-form audit)
+- [x] Correct header validation rules for HTTP/1.1 (duplicate header policy and full invalid-form audit)
 - [x] Proper chunked transfer decoding (not only completeness detection)
-- [ ] Better request state handling for partial/incremental reads and pipelining safety
+- [x] Better request state handling for partial/incremental reads and pipelining safety
 
 ### Methods and behavior
 
 - [x] Full `POST` support for CGI and uploads
 - [x] Full `DELETE` support for regular files
 - [x] Implement request body size enforcement (`client_max_body_size` -> `413`)
-- [ ] Correct method behavior per route and per resource (status code accuracy)
+- [x] Correct method behavior per route and per resource (status code accuracy)
 
 ### Uploads
 
@@ -85,33 +85,33 @@ This checklist tracks only mandatory requirements (no bonus scope).
 ### Static files and routing completeness
 
 - [x] Harden filesystem path resolution against plain and URL-encoded traversal edge cases
-- [ ] Finalize index resolution behavior for directories
-- [ ] Ensure autoindex behavior is fully compliant with route config
-- [ ] Improve redirection handling semantics (status variants and headers)
+- [x] Finalize index resolution behavior for directories
+- [x] Ensure autoindex behavior is fully compliant with route config
+- [x] Improve redirection handling semantics (status variants and headers)
 
 ### Error pages and status accuracy
 
 - [x] Serve configured custom error pages consistently
-- [ ] Audit and correct status codes for all edge cases
+- [x] Audit and correct status codes for all edge cases
 
 ### Connection management and resilience
 
-- [ ] Keep-alive lifecycle correctness across multiple requests per connection
-- [ ] Ensure requests never hang indefinitely (timeouts + parse failure exits)
-- [ ] Robust cleanup on disconnects, short reads/writes, and socket errors
+- [x] Keep-alive lifecycle correctness across multiple requests per connection
+- [x] Ensure requests never hang indefinitely (timeouts + parse failure exits)
+- [x] Robust cleanup on disconnects, short reads/writes, and socket errors
 
 ### Multi-server / listen behavior
 
 - [x] Handle duplicate or overlapping listen definitions more cleanly in provided config
-- [ ] Ensure expected behavior when multiple server configs share address/port
+- [x] Ensure expected behavior when multiple server configs share address/port
 
 ### Mandatory quality and evaluation readiness
 
-- [ ] Compare core behaviors against NGINX for parity in key scenarios
-- [ ] Add repeatable test checklist/scripts for evaluator demos (GET/POST/DELETE, uploads, CGI, error pages)
-- [ ] Stress test for stability under concurrent clients
+- [x] Compare core behaviors against NGINX for parity in key scenarios
+- [x] Add repeatable test checklist/scripts for evaluator demos (GET/POST/DELETE, uploads, CGI, error pages)
+- [x] Stress test for stability under concurrent clients
 - [x] Verify no blocking socket/CGI pipe I/O occurs outside readiness checks
-- [ ] Validate full mandatory path end-to-end with provided config files
+- [x] Validate full mandatory path end-to-end with provided config files
 
 ## Explicitly Out of Scope
 

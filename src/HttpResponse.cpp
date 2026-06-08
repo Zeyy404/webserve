@@ -1,6 +1,7 @@
 #include "../include/HttpResponse.hpp"
 
 #include <sstream>
+#include <ctime>
 
 // Orthodox Canonical Form
 HttpResponse::HttpResponse() : _statusCode(200), _statusMessage("OK"), _httpVersion("HTTP/1.1"), _headersSent(false) {
@@ -72,6 +73,7 @@ const std::string& HttpResponse::getBody() const {
 // Response building
 std::string HttpResponse::build() {
 	setContentLength(_body.size());
+	addHeader("Date", getHttpDate());
 	return buildHeaders() + _body;
 }
 
@@ -138,6 +140,8 @@ std::string HttpResponse::getStatusMessage(int code) const {
 		case 204: return "No Content";
 		case 301: return "Moved Permanently";
 		case 302: return "Found";
+		case 303: return "See Other";
+		case 307: return "Temporary Redirect";
 		case 400: return "Bad Request";
 		case 403: return "Forbidden";
 		case 404: return "Not Found";
@@ -156,4 +160,12 @@ std::string HttpResponse::getStatusMessage(int code) const {
 void HttpResponse::setDefaultHeaders() {
 	addHeader("Server", "webserv/0.1");
 	addHeader("Connection", "close");
+}
+
+std::string HttpResponse::getHttpDate() const {
+	time_t now = std::time(NULL);
+	struct tm* gmt = std::gmtime(&now);
+	char buf[64];
+	std::strftime(buf, sizeof(buf), "%a, %d %b %Y %H:%M:%S GMT", gmt);
+	return std::string(buf);
 }

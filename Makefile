@@ -28,7 +28,6 @@ SRCS		= $(SRC_DIR)/main.cpp \
 			  $(SRC_DIR)/Route.cpp \
 			  $(SRC_DIR)/HttpRequest.cpp \
 			  $(SRC_DIR)/HttpResponse.cpp \
-			  $(SRC_DIR)/HttpParser.cpp \
 			  $(SRC_DIR)/Socket.cpp \
 			  $(SRC_DIR)/Client.cpp \
 			  $(SRC_DIR)/CgiHandler.cpp \
@@ -46,7 +45,6 @@ HEADERS		= $(INC_DIR)/Server.hpp \
 			  $(INC_DIR)/Route.hpp \
 			  $(INC_DIR)/HttpRequest.hpp \
 			  $(INC_DIR)/HttpResponse.hpp \
-			  $(INC_DIR)/HttpParser.hpp \
 			  $(INC_DIR)/Socket.hpp \
 			  $(INC_DIR)/Client.hpp \
 			  $(INC_DIR)/CgiHandler.hpp \

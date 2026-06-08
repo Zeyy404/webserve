@@ -167,14 +167,32 @@ void Server::setupListenSockets() {
 	_listenSockets.reserve(_serverConfigs.size());
 
 	for (size_t i = 0; i < _serverConfigs.size(); ++i) {
-		Socket socket(_serverConfigs[i].getHost(), _serverConfigs[i].getPort());
+		std::string host = _serverConfigs[i].getHost();
+		int port = _serverConfigs[i].getPort();
+
+		bool found = false;
+		for (size_t j = 0; j < _listenSockets.size(); ++j) {
+			if (_listenSockets[j].getHost() == host && _listenSockets[j].getPort() == port) {
+				int fd = _listenSockets[j].getFd();
+				_listenConfig[fd] = &_serverConfigs[i];
+				std::ostringstream oss;
+				oss << "Sharing existing listen socket for " << host << ":" << port;
+				Logger::getInstance()->info(oss.str());
+				found = true;
+				break;
+			}
+		}
+		if (found)
+			continue;
+
+		Socket socket(host, port);
 		if (!socket.create()) {
-			Logger::getInstance()->warning("Failed to create socket for " + _serverConfigs[i].getHost());
+			Logger::getInstance()->warning("Failed to create socket for " + host);
 			continue;
 		}
 		if (!socket.bind()) {
 			std::ostringstream oss;
-			oss << "Failed to bind " << _serverConfigs[i].getHost() << ":" << _serverConfigs[i].getPort();
+			oss << "Failed to bind " << host << ":" << port;
 			Logger::getInstance()->warning(oss.str());
 			socket.close();
 			continue;
@@ -191,7 +209,7 @@ void Server::setupListenSockets() {
 		FD_SET(fd, &_masterReadFds);
 		_listenConfig[fd] = &_serverConfigs[i];
 		std::ostringstream oss;
-		oss << "Listening on " << _serverConfigs[i].getHost() << ":" << _serverConfigs[i].getPort();
+		oss << "Listening on " << host << ":" << port;
 		Logger::getInstance()->info(oss.str());
 	}
 
@@ -203,8 +221,11 @@ void Server::acceptNewConnection(int listenFd) {
 	struct sockaddr_in clientAddr;
 	socklen_t clientLen = sizeof(clientAddr);
 	int clientFd = ::accept(listenFd, reinterpret_cast<struct sockaddr*>(&clientAddr), &clientLen);
-	if (clientFd < 0)
+	if (clientFd < 0) {
+		if (errno != EAGAIN && errno != EWOULDBLOCK)
+			Logger::getInstance()->warning("Accept failed");
 		return;
+	}
 
 	fcntl(clientFd, F_SETFL, O_NONBLOCK);
 

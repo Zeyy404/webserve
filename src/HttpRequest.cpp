@@ -207,6 +207,9 @@ void HttpRequest::parseRequestLine(const std::string& line) {
 void HttpRequest::parseHeaders(const std::string& headerSection) {
 	std::istringstream iss(headerSection);
 	std::string line;
+	bool hasContentLength = false;
+	bool hasTransferEncoding = false;
+
 	while (std::getline(iss, line)) {
 		if (!line.empty() && line[line.size() - 1] == '\r')
 			line.erase(line.size() - 1);
@@ -230,23 +233,59 @@ void HttpRequest::parseHeaders(const std::string& headerSection) {
 		while (!value.empty() && (value[0] == ' ' || value[0] == '\t'))
 			value.erase(0, 1);
 		std::string lowerKey = toLowerCase(key);
+
 		if (lowerKey == "host" && _headers.find("host") != _headers.end()) {
 			_isValid = false;
 			_errorCode = 400;
 			continue;
 		}
+
+		if (lowerKey == "content-length") {
+			if (hasContentLength || hasTransferEncoding) {
+				_isValid = false;
+				_errorCode = 400;
+				continue;
+			}
+			hasContentLength = true;
+		}
+
+		if (lowerKey == "transfer-encoding") {
+			if (hasContentLength) {
+				_isValid = false;
+				_errorCode = 400;
+				continue;
+			}
+			hasTransferEncoding = true;
+		}
+
+		for (size_t i = 0; i < value.size(); ++i) {
+			if (value[i] == '\r' || value[i] == '\n') {
+				_isValid = false;
+				_errorCode = 400;
+				break;
+			}
+		}
+		if (!_isValid)
+			continue;
+
 		_headers[lowerKey] = value;
 	}
 
 	if (!_isValid)
 		return;
 	if (hasHeader("content-length")) {
-		if (!isDigits(getHeader("content-length"))) {
+		std::string cl = getHeader("content-length");
+		if (!isDigits(cl)) {
 			_isValid = false;
 			_errorCode = 400;
 			return;
 		}
-		_contentLength = static_cast<size_t>(std::strtoul(getHeader("content-length").c_str(), NULL, 10));
+		_contentLength = static_cast<size_t>(std::strtoul(cl.c_str(), NULL, 10));
+		if (_contentLength > 0 && cl.find_first_not_of("0123456789") != std::string::npos) {
+			_isValid = false;
+			_errorCode = 400;
+			return;
+		}
 	}
 	if (hasHeader("transfer-encoding") && toLowerCase(getHeader("transfer-encoding")) == "chunked")
 		_isChunked = true;
