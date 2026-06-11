@@ -59,6 +59,15 @@
             <a href="/uploads">📁 View Uploads</a>
             <a href="/cgi-bin">⚙️ CGI Scripts</a>
         </div>
+        <div style="margin-top: 30px; background: rgba(255,255,255,0.15); padding: 20px; border-radius: 8px;">
+            <h3>📤 Upload a File</h3>
+            <form action="/uploads/" method="POST" enctype="multipart/form-data">
+                <input type="file" name="file" style="margin: 10px 0; color: #333;"><br>
+                <button type="submit" style="padding: 8px 24px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 1em;">
+                    Upload
+                </button>
+            </form>
+        </div>
         <p style="margin-top: 30px; font-size: 0.9em; opacity: 0.8;">
             Server: Webserv/1.0 | Protocol: HTTP/1.1
         </p>
