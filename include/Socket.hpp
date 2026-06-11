@@ -28,20 +28,15 @@ public:
 	bool		create();
 	bool		bind();
 	bool		listen(int backlog);
-	int			accept();
 	void		close();
 
 	// Getters
 	int					getFd() const;
 	int					getPort() const;
 	const std::string&	getHost() const;
-	bool				isListening() const;
-	struct sockaddr_in	getAddress() const;
 
 	// Setters
 	void		setFd(int fd);
-	void		setPort(int port);
-	void		setHost(const std::string& host);
 };
 
 #endif

@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   Logger.cpp                                         :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: hmensah- <hmensah-@student.42abudhabi.a    +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/06/08 22:20:20 by hmensah-          #+#    #+#             */
+/*   Updated: 2026/06/08 22:20:58 by hmensah-         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include "../include/Logger.hpp"
 #include <ctime>
 #include <iomanip>
@@ -64,10 +76,6 @@ void Logger::log(LogLevel level, const std::string& message) {
 	writeLog(level, message);
 }
 
-void Logger::debug(const std::string& message) {
-	log(DEBUG, message);
-}
-
 void Logger::info(const std::string& message) {
 	log(INFO, message);
 }
@@ -120,15 +128,4 @@ void Logger::writeLog(LogLevel level, const std::string& message) {
 	}
 }
 
-// Getters
-LogLevel Logger::getMinLevel() const {
-	return _minLevel;
-}
 
-bool Logger::isConsoleEnabled() const {
-	return _toConsole;
-}
-
-bool Logger::isFileEnabled() const {
-	return _toFile;
-}

@@ -44,7 +44,6 @@ public:
 	~CgiHandler();
 
 	// CGI execution
-	bool		execute(const std::string& scriptPath, const Route& route);
 	bool		start(const std::string& scriptPath, const Route& route);
 	ssize_t		writeInput();
 	ssize_t		readOutput();
@@ -58,18 +57,12 @@ public:
 	void		setEnvVariable(const std::string& key, const std::string& value);
 
 	// Getters
-	const std::string&	getOutput() const;
-	int					getExitStatus() const;
-	const std::string&	getScriptPath() const;
-	const std::string&	getCgiExecutable() const;
 	int					getInputFd() const;
 	int					getOutputFd() const;
 	bool				wantsInputWrite() const;
 	bool				wantsOutputRead() const;
 
 	// Setters
-	void		setScriptPath(const std::string& path);
-	void		setCgiExecutable(const std::string& executable);
 	void		setServerPort(int port);
 
 	// Utility methods

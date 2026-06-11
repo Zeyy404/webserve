@@ -46,16 +46,10 @@ public:
 
 	// Logging methods
 	void		log(LogLevel level, const std::string& message);
-	void		debug(const std::string& message);
 	void		info(const std::string& message);
 	void		warning(const std::string& message);
 	void		error(const std::string& message);
 	void		fatal(const std::string& message);
-
-	// Getters
-	LogLevel	getMinLevel() const;
-	bool		isConsoleEnabled() const;
-	bool		isFileEnabled() const;
 };
 
 #endif

@@ -115,10 +115,6 @@ CgiHandler::~CgiHandler() {
 }
 
 // CGI execution
-bool CgiHandler::execute(const std::string& scriptPath, const Route& route) {
-	return start(scriptPath, route);
-}
-
 bool CgiHandler::start(const std::string& scriptPath, const Route& route) {
 	_scriptPath = scriptPath;
 	_cgiExecutable = getCgiExecutablePath(extensionWithDot(scriptPath), route);
@@ -409,22 +405,6 @@ void CgiHandler::freeEnvArray(char** env) const {
 }
 
 // Getters
-const std::string& CgiHandler::getOutput() const {
-	return _output;
-}
-
-int CgiHandler::getExitStatus() const {
-	return _exitStatus;
-}
-
-const std::string& CgiHandler::getScriptPath() const {
-	return _scriptPath;
-}
-
-const std::string& CgiHandler::getCgiExecutable() const {
-	return _cgiExecutable;
-}
-
 int CgiHandler::getInputFd() const {
 	return _inputFd;
 }
@@ -442,14 +422,6 @@ bool CgiHandler::wantsOutputRead() const {
 }
 
 // Setters
-void CgiHandler::setScriptPath(const std::string& path) {
-	_scriptPath = path;
-}
-
-void CgiHandler::setCgiExecutable(const std::string& executable) {
-	_cgiExecutable = executable;
-}
-
 void CgiHandler::setServerPort(int port) {
 	_serverPort = port;
 }

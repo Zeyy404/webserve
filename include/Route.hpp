@@ -26,7 +26,6 @@ public:
 	~Route();
 
 	// Setters
-	void		setPath(const std::string& path);
 	void		addAllowedMethod(const std::string& method);
 	void		setRoot(const std::string& root);
 	void		setAutoindex(bool autoindex);
@@ -45,7 +44,6 @@ public:
 	const std::string&						getRedirect() const;
 	int										getRedirectCode() const;
 	const std::string&						getUploadPath() const;
-	const std::map<std::string, std::string>&	getCgiExtensions() const;
 
 	// Utility methods
 	bool		isMethodAllowed(const std::string& method) const;

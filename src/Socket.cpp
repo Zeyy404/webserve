@@ -69,21 +69,6 @@ bool Socket::listen(int backlog) {
 	return true;
 }
 
-int Socket::accept() {
-	if (_fd < 0)
-		return -1;
-
-	struct sockaddr_in clientAddr;
-	socklen_t clientLen = sizeof(clientAddr);
-	int clientFd = ::accept(_fd, reinterpret_cast<struct sockaddr*>(&clientAddr), &clientLen);
-	if (clientFd < 0)
-		return -1;
-
-	fcntl(clientFd, F_SETFL, O_NONBLOCK);
-
-	return clientFd;
-}
-
 void Socket::close() {
 	if (_fd != -1) {
 		::close(_fd);
@@ -118,23 +103,7 @@ const std::string& Socket::getHost() const {
 	return _host;
 }
 
-bool Socket::isListening() const {
-	return _isListening;
-}
-
-struct sockaddr_in Socket::getAddress() const {
-	return _address;
-}
-
 // Setters
 void Socket::setFd(int fd) {
 	_fd = fd;
-}
-
-void Socket::setPort(int port) {
-	_port = port;
-}
-
-void Socket::setHost(const std::string& host) {
-	_host = host;
 }

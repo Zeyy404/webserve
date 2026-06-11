@@ -7,7 +7,6 @@
 #include <ctime>
 #include <sstream>
 #include <stdexcept>
-#include <vector>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/socket.h>
@@ -43,14 +42,6 @@ Server::~Server() {
 }
 
 // Configuration
-void Server::loadConfig(const std::string& configFile) {
-	ConfigParser parser(configFile);
-	if (!parser.parse())
-		throw std::runtime_error("Failed to parse configuration file");
-
-	_serverConfigs = parser.getServerConfigs();
-}
-
 void Server::addServerConfig(const ServerConfig& config) {
 	_serverConfigs.push_back(config);
 }
@@ -376,8 +367,4 @@ void Server::updateMaxFd() {
 // Getters
 const std::vector<ServerConfig>& Server::getServerConfigs() const {
 	return _serverConfigs;
-}
-
-int Server::getMaxFd() const {
-	return _maxFd;
 }

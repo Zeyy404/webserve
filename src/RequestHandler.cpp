@@ -278,11 +278,6 @@ void RequestHandler::handleGet() {
 		return;
 	}
 
-	if (_route != NULL && CgiHandler::isCgiRequest(filePath, *_route)) {
-		handleCgi();
-		return;
-	}
-
 	serveStaticFile(filePath);
 }
 
@@ -290,15 +285,6 @@ void RequestHandler::handlePost() {
 	std::string filePath = resolveFilePath();
 	if (filePath.empty()) {
 		handleError(403);
-		return;
-	}
-
-	if (_route != NULL && CgiHandler::isCgiRequest(filePath, *_route)) {
-		if (!pathExists(filePath)) {
-			handleError(404);
-			return;
-		}
-		handleCgi();
 		return;
 	}
 
@@ -334,10 +320,6 @@ void RequestHandler::handleDelete() {
 void RequestHandler::handleHead() {
 	handleGet();
 	_response.setBody("");
-}
-
-void RequestHandler::handlePut() {
-	handleError(501);
 }
 
 // Private helper methods
@@ -393,10 +375,6 @@ void RequestHandler::handleRedirect(const std::string& location) {
 	std::ostringstream oss;
 	oss << "<html><body><h1>" << code << " " << _response.getStatusMessage() << "</h1></body></html>";
 	_response.setBody(oss.str());
-}
-
-void RequestHandler::handleCgi() {
-	handleError(502); // is this done or ???
 }
 
 void RequestHandler::handleFileUpload() {
@@ -544,11 +522,3 @@ void RequestHandler::sendErrorPage(int statusCode) {
 	_response.setBody(fallback.str());
 }
 
-// Utility methods
-void RequestHandler::setRoute(Route* route) {
-	_route = route;
-}
-
-Route* RequestHandler::getRoute() const {
-	return _route;
-}

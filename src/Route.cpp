@@ -32,10 +32,6 @@ Route::~Route() {
 }
 
 // Setters
-void Route::setPath(const std::string& path) {
-	_path = path;
-}
-
 void Route::addAllowedMethod(const std::string& method) {
 	_allowedMethods.push_back(method);
 }
@@ -99,10 +95,6 @@ int Route::getRedirectCode() const {
 
 const std::string& Route::getUploadPath() const {
 	return _uploadPath;
-}
-
-const std::map<std::string, std::string>& Route::getCgiExtensions() const {
-	return _cgiExtensions;
 }
 
 // Utility methods

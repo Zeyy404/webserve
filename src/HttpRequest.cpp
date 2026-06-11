@@ -384,35 +384,6 @@ const std::string& HttpRequest::getQueryString() const {
 	return _queryString;
 }
 
-size_t HttpRequest::getContentLength() const {
-	return _contentLength;
-}
-
-bool HttpRequest::isChunked() const {
-	return _isChunked;
-}
-
-// Setters
-void HttpRequest::setMethod(const std::string& method) {
-	_method = method;
-}
-
-void HttpRequest::setUri(const std::string& uri) {
-	_uri = uri;
-}
-
-void HttpRequest::setHttpVersion(const std::string& version) {
-	_httpVersion = version;
-}
-
-void HttpRequest::addHeader(const std::string& key, const std::string& value) {
-	_headers[key] = value;
-}
-
-void HttpRequest::setBody(const std::string& body) {
-	_body = body;
-}
-
 // Utility methods
 bool HttpRequest::hasHeader(const std::string& key) const {
 	return _headers.find(toLowerCase(key)) != _headers.end();

@@ -25,7 +25,6 @@ private:
 	// Validation
 	void		validateConfig();
 	void		validateServerConfig(const ServerConfig& config);
-	bool		isDuplicateServer(const ServerConfig& config);
 
 public:
 	// Orthodox Canonical Form
@@ -37,14 +36,9 @@ public:
 
 	// Parsing
 	bool		parse();
-	void		parse(const std::string& configFile);
 
 	// Getters
 	const std::vector<ServerConfig>&	getServerConfigs() const;
-	const std::string&					getConfigFile() const;
-
-	// Setters
-	void		setConfigFile(const std::string& file);
 
 	// Utility methods
 	static std::vector<std::string>		split(const std::string& str, char delimiter);

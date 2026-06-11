@@ -42,7 +42,6 @@ public:
 	~Server();
 
 	// Configuration
-	void		loadConfig(const std::string& configFile);
 	void		addServerConfig(const ServerConfig& config);
 
 	// Main server operations
@@ -56,7 +55,6 @@ public:
 
 	// Getters
 	const std::vector<ServerConfig>&	getServerConfigs() const;
-	int									getMaxFd() const;
 };
 
 #endif

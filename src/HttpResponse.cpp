@@ -1,10 +1,22 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   HttpResponse.cpp                                   :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: hmensah- <hmensah-@student.42abudhabi.a    +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/06/08 22:21:34 by hmensah-          #+#    #+#             */
+/*   Updated: 2026/06/08 22:21:35 by hmensah-         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include "../include/HttpResponse.hpp"
 
 #include <sstream>
 #include <ctime>
 
 // Orthodox Canonical Form
-HttpResponse::HttpResponse() : _statusCode(200), _statusMessage("OK"), _httpVersion("HTTP/1.1"), _headersSent(false) {
+HttpResponse::HttpResponse() : _statusCode(200), _statusMessage("OK"), _httpVersion("HTTP/1.1") {
 	setDefaultHeaders();
 }
 
@@ -19,7 +31,6 @@ HttpResponse& HttpResponse::operator=(const HttpResponse& other) {
 		_httpVersion = other._httpVersion;
 		_headers = other._headers;
 		_body = other._body;
-		_headersSent = other._headersSent;
 	}
 	return *this;
 }
@@ -33,20 +44,12 @@ void HttpResponse::setStatusCode(int code) {
 	_statusMessage = getStatusMessage(code);
 }
 
-void HttpResponse::setHttpVersion(const std::string& version) {
-	_httpVersion = version;
-}
-
 void HttpResponse::addHeader(const std::string& key, const std::string& value) {
 	_headers[key] = value;
 }
 
 void HttpResponse::setBody(const std::string& body) {
 	_body = body;
-}
-
-void HttpResponse::appendBody(const std::string& data) {
-	_body.append(data);
 }
 
 // Getters
@@ -56,14 +59,6 @@ int HttpResponse::getStatusCode() const {
 
 const std::string& HttpResponse::getStatusMessage() const {
 	return _statusMessage;
-}
-
-const std::string& HttpResponse::getHttpVersion() const {
-	return _httpVersion;
-}
-
-const std::map<std::string, std::string>& HttpResponse::getHeaders() const {
-	return _headers;
 }
 
 const std::string& HttpResponse::getBody() const {
@@ -83,7 +78,6 @@ std::string HttpResponse::buildHeaders() {
 	for (std::map<std::string, std::string>::const_iterator it = _headers.begin(); it != _headers.end(); ++it)
 		oss << it->first << ": " << it->second << "\r\n";
 	oss << "\r\n";
-	_headersSent = true;
 	return oss.str();
 }
 
@@ -93,7 +87,6 @@ void HttpResponse::clear() {
 	_httpVersion = "HTTP/1.1";
 	_headers.clear();
 	_body.clear();
-	_headersSent = false;
 	setDefaultHeaders();
 }
 
@@ -110,14 +103,6 @@ void HttpResponse::setContentLength(size_t length) {
 
 void HttpResponse::setLocation(const std::string& location) {
 	addHeader("Location", location);
-}
-
-void HttpResponse::setCookie(const std::string& name, const std::string& value) {
-	addHeader("Set-Cookie", name + "=" + value + "; Path=/");
-}
-
-bool HttpResponse::isHeadersSent() const {
-	return _headersSent;
 }
 
 void HttpResponse::buildErrorResponse(int code, const std::string& errorPage) {

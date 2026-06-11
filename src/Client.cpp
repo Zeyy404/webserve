@@ -2,7 +2,7 @@
 #include "../include/RequestHandler.hpp"
 #include <unistd.h>
 #include <ctime>
-#include <arpa/inet.h>
+
 
 // Orthodox Canonical Form
 Client::Client() : _fd(-1), _keepAlive(true), _lastActivity(std::time(NULL)), _serverConfig(NULL), _cgi(NULL) {
@@ -184,24 +184,8 @@ HttpResponse& Client::getResponse() {
 	return _response;
 }
 
-const std::string& Client::getReadBuffer() const {
-	return _readBuffer;
-}
-
-const std::string& Client::getWriteBuffer() const {
-	return _writeBuffer;
-}
-
 bool Client::getKeepAlive() const {
 	return _keepAlive;
-}
-
-time_t Client::getLastActivity() const {
-	return _lastActivity;
-}
-
-ServerConfig* Client::getServerConfig() const {
-	return _serverConfig;
 }
 
 bool Client::hasActiveCgi() const {
@@ -242,14 +226,6 @@ void Client::setKeepAlive(bool keepAlive) {
 }
 
 // Buffer operations
-void Client::appendReadBuffer(const std::string& data) {
-	_readBuffer.append(data);
-}
-
-void Client::appendWriteBuffer(const std::string& data) {
-	_writeBuffer.append(data);
-}
-
 void Client::clearReadBuffer() {
 	_readBuffer.clear();
 }
@@ -261,11 +237,4 @@ void Client::clearWriteBuffer() {
 // Utility methods
 bool Client::isTimeout(time_t currentTime, time_t timeout) const {
 	return (currentTime - _lastActivity) > timeout;
-}
-
-std::string Client::getClientIp() const {
-	char ip[INET_ADDRSTRLEN];
-	if (::inet_ntop(AF_INET, &_address.sin_addr, ip, sizeof(ip)) == NULL)
-		return "0.0.0.0";
-	return std::string(ip);
 }

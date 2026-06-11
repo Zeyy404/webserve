@@ -37,17 +37,13 @@ public:
 	// Getters
 	const std::string&					getHost() const;
 	int									getPort() const;
-	const std::vector<std::string>&		getServerNames() const;
-	const std::map<int, std::string>&	getErrorPages() const;
 	size_t								getClientMaxBodySize() const;
-	const std::vector<Route>&			getRoutes() const;
 	const std::string&					getRoot() const;
 	const std::vector<std::string>&		getIndex() const;
 
 	// Utility methods
 	std::string		getErrorPage(int code) const;
 	Route*			matchRoute(const std::string& path);
-	bool			isServerName(const std::string& name) const;
 };
 
 #endif

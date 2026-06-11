@@ -50,15 +50,6 @@ public:
 	std::string							getHeader(const std::string& key) const;
 	const std::string&					getBody() const;
 	const std::string&					getQueryString() const;
-	size_t								getContentLength() const;
-	bool								isChunked() const;
-
-	// Setters
-	void		setMethod(const std::string& method);
-	void		setUri(const std::string& uri);
-	void		setHttpVersion(const std::string& version);
-	void		addHeader(const std::string& key, const std::string& value);
-	void		setBody(const std::string& body);
 
 	// Utility methods
 	bool		hasHeader(const std::string& key) const;

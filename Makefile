@@ -33,8 +33,7 @@ SRCS		= $(SRC_DIR)/main.cpp \
 			  $(SRC_DIR)/CgiHandler.cpp \
 			  $(SRC_DIR)/ConfigParser.cpp \
 			  $(SRC_DIR)/RequestHandler.cpp \
-			  $(SRC_DIR)/Logger.cpp \
-			  $(SRC_DIR)/Utils.cpp
+			  $(SRC_DIR)/Logger.cpp
 
 # Object files
 OBJS		= $(SRCS:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
@@ -50,8 +49,7 @@ HEADERS		= $(INC_DIR)/Server.hpp \
 			  $(INC_DIR)/CgiHandler.hpp \
 			  $(INC_DIR)/ConfigParser.hpp \
 			  $(INC_DIR)/RequestHandler.hpp \
-			  $(INC_DIR)/Logger.hpp \
-			  $(INC_DIR)/Utils.hpp
+			  $(INC_DIR)/Logger.hpp
 
 # Colors
 GREEN		= \033[0;32m

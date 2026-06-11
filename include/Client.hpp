@@ -49,11 +49,7 @@ public:
 	int					getFd() const;
 	HttpRequest&		getRequest();
 	HttpResponse&		getResponse();
-	const std::string&	getReadBuffer() const;
-	const std::string&	getWriteBuffer() const;
 	bool				getKeepAlive() const;
-	time_t				getLastActivity() const;
-	ServerConfig*		getServerConfig() const;
 	bool				hasActiveCgi() const;
 	bool				isCgiComplete();
 	bool				isCgiTimeout(time_t currentTime, time_t timeout) const;
@@ -66,14 +62,11 @@ public:
 	void		setKeepAlive(bool keepAlive);
 
 	// Buffer operations
-	void		appendReadBuffer(const std::string& data);
-	void		appendWriteBuffer(const std::string& data);
 	void		clearReadBuffer();
 	void		clearWriteBuffer();
 
 	// Utility methods
 	bool		isTimeout(time_t currentTime, time_t timeout) const;
-	std::string	getClientIp() const;
 };
 
 #endif

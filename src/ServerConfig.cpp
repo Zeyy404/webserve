@@ -69,20 +69,8 @@ int ServerConfig::getPort() const {
 	return _port;
 }
 
-const std::vector<std::string>& ServerConfig::getServerNames() const {
-	return _serverNames;
-}
-
-const std::map<int, std::string>& ServerConfig::getErrorPages() const {
-	return _errorPages;
-}
-
 size_t ServerConfig::getClientMaxBodySize() const {
 	return _clientMaxBodySize;
-}
-
-const std::vector<Route>& ServerConfig::getRoutes() const {
-	return _routes;
 }
 
 const std::string& ServerConfig::getRoot() const {
@@ -116,6 +104,4 @@ Route* ServerConfig::matchRoute(const std::string& path) {
 	return best;
 }
 
-bool ServerConfig::isServerName(const std::string& name) const {
-	return std::find(_serverNames.begin(), _serverNames.end(), name) != _serverNames.end();
-}
+
