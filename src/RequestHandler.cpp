@@ -371,7 +371,11 @@ void RequestHandler::generateDirectoryListing(const std::string& path) {
 		std::string name(entry->d_name);
 		if (name == ".")
 			continue;
-		html << "<li><a href=\"" << name << "\">" << name << "</a></li>";
+		std::string base = _request.getPath();
+		if (!base.empty() && base[base.size() - 1] != '/')
+    		base += '/';
+
+		html << "<li><a href=\"" << base << name << "\">" << name << "</a></li>";
 	}
 	closedir(dir);
 
@@ -392,7 +396,7 @@ void RequestHandler::handleRedirect(const std::string& location) {
 }
 
 void RequestHandler::handleCgi() {
-	handleError(502);
+	handleError(502); // is this done or ???
 }
 
 void RequestHandler::handleFileUpload() {
