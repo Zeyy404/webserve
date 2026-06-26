@@ -413,7 +413,28 @@ void RequestHandler::handleLogout() {
     _response.setBody("<html><body>Redirecting...</body></html>");
 }
 
-void RequestHandler::handleMyUploads() {}
+void RequestHandler::handleMyUploads() {
+	Session* session = _request.getSession();
+	if (session == NULL || !session->hasKey("username")) {
+		handleError(403);
+		return;
+	}
+
+	std::string username = session->getValue("username");
+	std::vector<std::string> files = FileRegistry::getInstance().getFiles(username);
+
+	std::ostringstream html;
+	html << "<html><body><h1>My Uploads</h1><ul>";
+	for (size_t i = 0; i < files.size(); ++i) {
+		std::string fileName = baseName(files[i]);
+		html << "<li><a href=\"" << files[i] << "\">" << fileName << "</a></li>";
+	}
+	html << "</ul></body></html>";
+
+	_response.setStatusCode(200);
+	_response.setContentType("text/html");
+	_response.setBody(html.str());
+}
 
 // Private helper methods
 void RequestHandler::serveStaticFile(const std::string& path) {
@@ -507,9 +528,10 @@ void RequestHandler::handleFileUpload() {
 	}
 
 	Session* session = _request.getSession();
-	if (session != NULL && session->hasKey("username"))
-		FileRegistry::getInstance().registerFile(session->getValue("username"), destination);
-
+	if (session != NULL && session->hasKey("username")) {
+		std::string url = "/uploads/" + sanitizeFileName(filename);
+		FileRegistry::getInstance().registerFile(session->getValue("username"), url);
+	}
 	_response.setStatusCode(303);
 	_response.setLocation("/my-uploads");
 	_response.setContentType("text/plain");
