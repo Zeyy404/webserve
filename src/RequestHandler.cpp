@@ -492,6 +492,13 @@ void RequestHandler::handleRedirect(const std::string& location) {
 }
 
 void RequestHandler::handleFileUpload() {
+	Session* session = _request.getSession();
+	if (session == NULL || !session->hasKey("username")) {
+		handleError(401);
+		return;
+	}
+
+	std::string username = session->getValue("username");
 	if (_route == NULL || _route->getUploadPath().empty()) {
 		handleError(403);
 		return;
@@ -526,12 +533,10 @@ void RequestHandler::handleFileUpload() {
 		handleError(500);
 		return;
 	}
+	
+	std::string url = "/uploads/" + sanitizeFileName(filename);
+	FileRegistry::getInstance().registerFile(session->getValue("username"), url);
 
-	Session* session = _request.getSession();
-	if (session != NULL && session->hasKey("username")) {
-		std::string url = "/uploads/" + sanitizeFileName(filename);
-		FileRegistry::getInstance().registerFile(session->getValue("username"), url);
-	}
 	_response.setStatusCode(303);
 	_response.setLocation("/my-uploads");
 	_response.setContentType("text/plain");
