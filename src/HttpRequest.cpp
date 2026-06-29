@@ -154,8 +154,6 @@ bool HttpRequest::parse(const std::string& rawRequest) {
 }
 
 void HttpRequest::appendData(const std::string& data) {
-	std::cout << "APPEND CALLED — current _isComplete: " << _isComplete 
-	          << " — appending: [" << data << "]" << std::endl;
 	_rawRequest.append(data);
 	std::string rawRequest = _rawRequest;
 	parse(rawRequest);
