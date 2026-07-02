@@ -24,10 +24,9 @@ public:
     void                        registerFile(const std::string& username, const std::string& path);
     void                        unregisterFile(const std::string& username, const std::string& path);
     std::vector<std::string>    getFiles(const std::string& username) const;
+    std::vector<std::string>    getFilesAndValidate(const std::string& username);
     bool                        hasFiles(const std::string& username) const;
     void                        clearUser(const std::string& username);
-    bool                        isOwner(const std::string& username, const std::string& path);
-
 };
 
 #endif

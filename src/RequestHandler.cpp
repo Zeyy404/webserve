@@ -323,21 +323,14 @@ void RequestHandler::handlePost() {
 }
 
 void RequestHandler::handleDelete() {
-	Session* session = _request.getSession();
-
-	
 	std::string filePath = resolveFilePath();
+
+	Session* session = _request.getSession();
 	if (session == NULL || !session->hasKey("username"))
 	{
 		handleError(403);
 		return;
-	}
-	std::string username = session->getValue("username");
-	if(!FileRegistry::getInstance().isOwner(username, filePath))
-	{
-		handleError(403);
-		return;
-	}
+	}	
 	if (filePath.empty()) {
 		handleError(403);
 		return;
@@ -358,7 +351,9 @@ void RequestHandler::handleDelete() {
 		handleError(403);
 		return;
 	}
-	FileRegistry::getInstance().unregisterFile(username, filePath);
+	
+	std::string urlPath = "/uploads/" + baseName(filePath);
+	FileRegistry::getInstance().unregisterFile(session->getValue("username"), urlPath);
 	_response.setStatusCode(204);
 	_response.setBody("");
 }
@@ -546,8 +541,8 @@ void RequestHandler::handleFileUpload() {
 		return;
 	}
 	
-	// std::string url = "/uploads/" + sanitizeFileName(filename);
-	FileRegistry::getInstance().registerFile(session->getValue("username"), destination);
+	std::string url = "/uploads/" + sanitizeFileName(filename);
+	FileRegistry::getInstance().registerFile(session->getValue("username"), url);
 
 	_response.setStatusCode(303);
 	_response.setLocation("/my-uploads");

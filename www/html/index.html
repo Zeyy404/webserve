@@ -192,8 +192,8 @@
                     var doc = new DOMParser().parseFromString(html, 'text/html');
                     select.innerHTML = '';
                     doc.querySelectorAll('a').forEach(function (a) {
-                        var href = decodeURIComponent(a.getAttribute('href'));
-                        var name = href.split('/').pop();
+                        var name = decodeURIComponent(a.getAttribute('href'))
+                            .replace(/^\/?uploads\/?/, '');
                         if (name && name !== '.' && name !== '..') {
                             var opt = document.createElement('option');
                             opt.value = name;
