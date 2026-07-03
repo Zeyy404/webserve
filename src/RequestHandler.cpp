@@ -185,6 +185,10 @@ namespace {
         }
         return fields;
     }
+
+	static bool isNotSpace(char c) {
+    	return (std::isspace(static_cast<unsigned char>(c)));
+}
 }
 
 // Orthodox Canonical Form
@@ -386,12 +390,12 @@ void RequestHandler::handleLogin() {
     std::string username = fields["username"];
 
     username = trim(username);
-
-    if (username.empty()) {
+	std::string::iterator it = std::find_if(username.begin(), username.end(), isNotSpace);
+    if (it == username.end()) {
         _response.setStatusCode(303);
         _response.setLocation("/");
-        _response.setContentType("text/html");
-        _response.setBody("<html><body>Redirecting...</body></html>");
+		_response.setContentType("text/html");
+    	_response.setBody("<html><body>Falied to login</body></html>");
         return;
     }
 
@@ -406,7 +410,7 @@ void RequestHandler::handleLogin() {
     _response.setStatusCode(303);
     _response.setLocation("/");
     _response.setContentType("text/html");
-    _response.setBody("<html><body>Redirecting...</body></html>");
+    _response.setBody("<html><body>Successfully logged in</body></html>");
 }
 
 void RequestHandler::handleLogout() {

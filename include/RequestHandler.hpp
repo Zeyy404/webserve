@@ -2,6 +2,8 @@
 # define REQUESTHANDLER_HPP
 
 # include <string>
+# include <iostream>
+# include <algorithm>
 # include "HttpRequest.hpp"
 # include "HttpResponse.hpp"
 # include "ServerConfig.hpp"
