@@ -11,41 +11,47 @@
 
 <body>
     <div class="container">
-        <h1>🚀 Welcome to Webserv!</h1>
+        
+        <!-- Header Actions (Login / Logout toggle) -->
+        <div class="header-actions">
+            <button id="show-login-btn" class="secondary small-btn hidden">🔑 Login</button>
+            <form id="logout-form" class="hidden" action="/logout" method="POST" style="margin:0;">
+                <button type="submit" class="secondary small-btn">🚪 Logout <span id="user-display"></span></button>
+            </form>
+        </div>
+
+        <h1>🚀 Webserv</h1>
         <p>Congratulations! Your HTTP server is up and running successfully.</p>
         <p>This is a custom-built HTTP/1.1 server written in C++98 as part of the 42 curriculum.</p>
 
         <div class="links">
             <a href="/cgi-bin">⚙️ CGI Scripts</a>
-            <a href="/my-uploads">🗂️ My Uploads</a>
+            <a href="/uploads">🗂️ My Uploads Index</a>
         </div>
 
-        <!-- LOGIN / UPLOAD -->
-        <div class="panel">
-            <h3 id="auth-title">🔐 Login</h3>
-
-            <!-- shown when logged OUT -->
+        <!-- HIDDEN LOGIN PANEL -->
+        <div id="login-panel" class="panel hidden">
+            <h3>🔐 Login to personal space</h3>
             <form id="login-form" class="login-form" action="/login" method="POST">
                 <input type="text" name="username" placeholder="Username" maxlength="32" required>
                 <button type="submit">Login</button>
+                <button type="button" class="secondary" id="cancel-login">Cancel</button>
+            </form>
+        </div>
+
+        <!-- MAIN FILE MANAGEMENT PANEL -->
+        <div id="file-panel" class="panel">
+            <h3 id="panel-title">🌍 Global Uploads</h3>
+            
+            <form class="upload-form" action="/uploads/" method="POST" enctype="multipart/form-data">
+                <input type="file" name="file" required>
+                <button type="submit">Upload</button>
             </form>
 
-            <!-- shown when logged IN -->
-            <div id="logged-in-box" class="hidden">
-                <form class="upload-form" action="/uploads/" method="POST" enctype="multipart/form-data">
-                    <input type="file" name="file" required>
-                    <button type="submit">Upload</button>
-                </form>
-
-                <h3 style="margin-top: 24px;">🗑️ Delete a File</h3>
-                <select id="filePath" class="file-input"></select>
-                <button id="deleteButton" class="delete-button">Delete</button>
-                <p id="resultMessage" class="result-message"></p>
-
-                <form class="logout-form" action="/logout" method="POST">
-                    <button class="secondary" type="submit">Logout</button>
-                </form>
-            </div>
+            <h3 style="margin-top: 24px;">🗑️ Delete a File</h3>
+            <select id="filePath" class="file-input"></select>
+            <button id="deleteButton" class="delete-button">Delete</button>
+            <p id="resultMessage" class="result-message"></p>
         </div>
 
         <footer class="credits">
