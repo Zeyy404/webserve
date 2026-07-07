@@ -1,90 +1,102 @@
-var select = document.getElementById('filePath');
-        var resultMessage = document.getElementById('resultMessage');
+// UI Elements
+const select = document.getElementById('filePath');
+const resultMessage = document.getElementById('resultMessage');
+const showLoginBtn = document.getElementById('show-login-btn');
+const logoutForm = document.getElementById('logout-form');
+const userDisplay = document.getElementById('user-display');
+const loginPanel = document.getElementById('login-panel');
+const filePanel = document.getElementById('file-panel');
+const panelTitle = document.getElementById('panel-title');
+const cancelLoginBtn = document.getElementById('cancel-login');
+const uploadButton = document.getElementById('upload-link');
+
+// Toggle the login form 
+showLoginBtn.addEventListener('click', () => {
+    loginPanel.classList.remove('hidden');
+    filePanel.classList.add('hidden');
+});
+
+cancelLoginBtn.addEventListener('click', () => {
+    loginPanel.classList.add('hidden');
+    filePanel.classList.remove('hidden');
+});
+
+// Load files depending on session state (Clean async/await structure)
+async function loadFileOptions(fetchUrl) {
+    try {
+        const res = await fetch(fetchUrl);
+        const html = await res.text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
         
-        // UI Elements
-        var showLoginBtn = document.getElementById('show-login-btn');
-        var logoutForm = document.getElementById('logout-form');
-        var userDisplay = document.getElementById('user-display');
-        var loginPanel = document.getElementById('login-panel');
-        var filePanel = document.getElementById('file-panel');
-        var panelTitle = document.getElementById('panel-title');
-        var cancelLoginBtn = document.getElementById('cancel-login');
-
-        // Toggle the login form
-        showLoginBtn.addEventListener('click', function() {
-            loginPanel.classList.remove('hidden');
-            filePanel.classList.add('hidden');
+        select.innerHTML = '';
+        
+        doc.querySelectorAll('a').forEach(a => {
+            const href = decodeURIComponent(a.getAttribute('href'));
+            // Strip leading paths to get just the filename
+            const name = href.replace(/^(\/?uploads\/?|\/?my-uploads\/?)/, '');
+            
+            if (name && name !== '.' && name !== '..') {
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = name;
+                select.appendChild(opt);
+            }
         });
+    } catch (error) {
+        console.error('Error loading files:', error);
+    }
+}
 
-        cancelLoginBtn.addEventListener('click', function() {
-            loginPanel.classList.add('hidden');
-            filePanel.classList.remove('hidden');
-        });
+// Delete action (Async/await with template literals)
+document.getElementById('deleteButton').addEventListener('click', async () => {
+    const filePath = select.value;
+    if (!filePath) return;
 
-        // Load files depending on session state (global vs personal)
-        function loadFileOptions(fetchUrl) {
-            fetch(fetchUrl)
-                .then(function (res) { return res.text(); })
-                .then(function (html) {
-                    var doc = new DOMParser().parseFromString(html, 'text/html');
-                    select.innerHTML = '';
-                    doc.querySelectorAll('a').forEach(function (a) {
-                        var href = decodeURIComponent(a.getAttribute('href'));
-                        // Strip leading paths to get just the filename
-                        var name = href.replace(/^(\/?uploads\/?|\/?my-uploads\/?)/, '');
-                        if (name && name !== '.' && name !== '..') {
-                            var opt = document.createElement('option');
-                            opt.value = name;
-                            opt.textContent = name;
-                            select.appendChild(opt);
-                        }
-                    });
-                });
+    try {
+        const res = await fetch(`/uploads/${encodeURIComponent(filePath)}`, { method: 'DELETE' });
+        
+        resultMessage.textContent = res.ok ? `Deleted "${filePath}"` : `Failed (status ${res.status})`;
+        resultMessage.className = `result-message ${res.ok ? 'success' : 'error'}`;
+
+        // Reload the correct list based on if we are logged in
+        const isGlobal = panelTitle.textContent.includes('Global');
+        loadFileOptions(isGlobal ? '/uploads/' : '/my-uploads');
+    } catch (error) {
+        resultMessage.textContent = 'Error deleting file';
+        resultMessage.className = 'result-message error';
+    }
+});
+
+// Initialize Session State
+(async function initSession() {
+    const fallbackToGlobal = () => {
+        showLoginBtn.classList.remove('hidden');
+        panelTitle.textContent = '🌍 Global Uploads';
+        loadFileOptions('/uploads/');
+    };
+
+    try {
+        const res = await fetch('/session');
+        const text = await res.text();
+        const prefix = 'Logged in as ';
+        
+        if (!text.startsWith(prefix)) {
+            fallbackToGlobal();
+            return;
         }
-
-        // Delete action
-        document.getElementById('deleteButton').addEventListener('click', function () {
-            var filePath = select.value;
-            if (!filePath) return;
-
-            // Assumes backend delete endpoint is always /uploads/{filename}
-            fetch('/uploads/' + encodeURIComponent(filePath), { method: 'DELETE' })
-                .then(function (res) {
-                    resultMessage.textContent = res.ok
-                        ? 'Deleted "' + filePath + '"'
-                        : 'Failed (status ' + res.status + ')';
-                    resultMessage.className = 'result-message' + (res.ok ? ' success' : ' error');
-                    
-                    // Reload the correct list based on if we are logged in
-                    var isGlobal = panelTitle.textContent.indexOf('Global') !== -1;
-                    loadFileOptions(isGlobal ? '/uploads/' : '/my-uploads');
-                });
-        });
-
-        // Initialize Session State
-        (function initSession() {
-            fetch('/session')
-                .then(function (res) { return res.text(); })
-                .then(function (text) {
-                    var prefix = 'Logged in as ';
-                    if (text.indexOf(prefix) !== 0) {
-                        // NO SESSION: Show global files & Login button
-                        showLoginBtn.classList.remove('hidden');
-                        panelTitle.textContent = '🌍 Global Uploads';
-                        loadFileOptions('/uploads/');
-                        return;
-                    }
-                    // HAS SESSION: Show personal files & Logout button
-                    var username = text.slice(prefix.length).split('\n')[0];
-                    logoutForm.classList.remove('hidden');
-                    userDisplay.textContent = '(' + username + ')';
-                    panelTitle.textContent = '📁 My Uploads (' + username + ')';
-                    loadFileOptions('/my-uploads');
-                })
-                .catch(function() {
-                    // Fallback to global state if session check fails
-                    showLoginBtn.classList.remove('hidden');
-                    panelTitle.textContent = '🌍 Global Uploads';
-                    loadFileOptions('/uploads/');
-                });
-        })();
+        
+        // HAS SESSION: Show personal files & Logout button
+        const username = text.slice(prefix.length).split('\n')[0];
+        logoutForm.classList.remove('hidden');
+        userDisplay.textContent = `(${username})`;
+        panelTitle.textContent = '📁 Upload files';
+        
+        // Dynamically pathing the href tag from the previous prompt
+        uploadButton.href = '/my-uploads';
+        uploadButton.textContent = `📁 My Uploads (${username})`;
+        
+        loadFileOptions('/my-uploads');
+    } catch {
+        fallbackToGlobal();
+    }
+})();
