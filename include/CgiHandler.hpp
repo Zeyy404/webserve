@@ -29,6 +29,10 @@ private:
 	std::string							_input;
 	int									_serverPort;
 	time_t								_startTime;
+	std::string							_scriptName;
+	std::string							_pathInfo;
+	std::string							_pathTranslated;
+	std::string							_remoteAddr;
 
 	// Helper methods
 	void		setupEnvironment(const Route& route);
@@ -43,8 +47,15 @@ public:
 	CgiHandler& operator=(const CgiHandler& other);
 	~CgiHandler();
 
-	// CGI execution
+	// CGI execution.
+	// start() forks and execs the interpreter; the child inherits its
+	// environment at that moment, so setServerPort/setScriptName/setPathInfo/
+	// setRemoteAddr must all be called BEFORE start().
 	bool		start(const std::string& scriptPath, const Route& route);
+	// One write/read per call; only call after select() reported the pipe fd
+	// ready. A failed write is retried on the next event (stdin is closed
+	// early only if the child already exited); stdin is closed after the last
+	// body byte so the child sees EOF, and output is read until EOF.
 	ssize_t		writeInput();
 	ssize_t		readOutput();
 	void		closeInput();
@@ -64,6 +75,9 @@ public:
 
 	// Setters
 	void		setServerPort(int port);
+	void		setScriptName(const std::string& scriptName);
+	void		setPathInfo(const std::string& pathInfo, const std::string& pathTranslated);
+	void		setRemoteAddr(const std::string& remoteAddr);
 
 	// Utility methods
 	static bool	isCgiRequest(const std::string& path, const Route& route);

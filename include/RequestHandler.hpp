@@ -35,6 +35,7 @@ private:
 	void		handleRedirect(const std::string& location);
 	void		handleFileUpload();
 	std::string	resolveFilePath();
+	std::string	resolveDecodedPath(const std::string& decodedPath);
 	bool		isAllowedMethod(const std::string& method);
 
 public:
@@ -46,6 +47,10 @@ public:
 
 	// Main handler
 	void		handle();
+	// Returns true when a CGI child was forked and the caller must drive its
+	// pipes through the event loop. When it returns false, `handled` says
+	// whether a response was already produced (CGI error, e.g. 404/502):
+	// if handled is false the request is not a CGI one — call handle().
 	bool		startCgiIfNeeded(CgiHandler& cgi, bool& handled);
 
 	// Error handling

@@ -20,6 +20,7 @@ private:
 	bool								_isValid;
 	int									_errorCode;
 	size_t								_contentLength;
+	size_t								_maxBodySize;
 	std::string							_rawRequest;
 	Session*							_session;
 	std::string							_sessionId;
@@ -30,6 +31,9 @@ private:
 	void		parseBody(const std::string& bodySection);
 	void		parseUri();
 	void		parseChunkedBody(const std::string& bodySection);
+	// Marks the request invalid AND complete (so the server stops reading and
+	// responds with getErrorCode()); always returns false.
+	bool		setError(int code);
 
 public:
 	// Orthodox Canonical Form
@@ -38,7 +42,10 @@ public:
 	HttpRequest& operator=(const HttpRequest& other);
 	~HttpRequest();
 
-	// Parsing
+	// Parsing.
+	// appendData() accumulates raw bytes and re-parses; poll the result with
+	// isComplete(). A complete request may still be invalid — check isValid()
+	// and respond with getErrorCode() (400/413/414/431/505) before using it.
 	bool		parse(const std::string& rawRequest);
 	void		appendData(const std::string& data);
 	bool		isComplete() const;
@@ -60,6 +67,10 @@ public:
 	// Setters
 	void	setSession(Session* session);
 	void    setSessionId(const std::string& id);
+	// Body-size limit from the server config (0 = unlimited). Enforced while
+	// parsing so oversized bodies are rejected with 413 before being buffered.
+	// Survives clear(), so it is set once per connection.
+	void	setMaxBodySize(size_t maxBodySize);
 
 	// Utility methods
 	bool		hasHeader(const std::string& key) const;

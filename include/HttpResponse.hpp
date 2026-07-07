@@ -14,6 +14,7 @@ class HttpResponse {
 	std::string							_body;
 	bool								_setCookie;
 	std::string							_cookieHeader;
+	bool								_suppressBody;
 
 	// Helper methods
 	std::string		getStatusMessage(int code) const;
@@ -33,6 +34,9 @@ public:
 	void		addHeader(const std::string& key, const std::string& value);
 	void		setBody(const std::string& body);
 	void		setCookieHeader(const std::string& cookie);
+	// For HEAD: build() omits the body from the wire output while
+	// Content-Length still reflects the entity size, as RFC 7231 requires.
+	void		setSuppressBody(bool suppress);
 
 	// Getters
 	int									getStatusCode() const;

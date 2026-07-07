@@ -46,9 +46,13 @@ public:
 	const std::string&						getUploadPath() const;
 
 	// Utility methods
+	// isMethodAllowed: an empty allowed_methods list means every method is
+	// allowed (nginx-like default).
 	bool		isMethodAllowed(const std::string& method) const;
 	bool		hasCgiExtension(const std::string& ext) const;
 	std::string	getCgiHandler(const std::string& ext) const;
+	// Prefix match on whole path segments: "/kapouet" matches /kapouet and
+	// /kapouet/x but not /kapouetXYZ.
 	bool		matches(const std::string& requestPath) const;
 };
 

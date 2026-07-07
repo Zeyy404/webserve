@@ -3,6 +3,18 @@
 #include "../include/SessionMiddleware.hpp"
 #include <unistd.h>
 #include <ctime>
+#include <sstream>
+#include <arpa/inet.h>
+
+namespace {
+	static std::string ipToString(const struct sockaddr_in& address) {
+		unsigned long ip = ntohl(address.sin_addr.s_addr);
+		std::ostringstream oss;
+		oss << ((ip >> 24) & 0xFF) << '.' << ((ip >> 16) & 0xFF) << '.'
+			<< ((ip >> 8) & 0xFF) << '.' << (ip & 0xFF);
+		return oss.str();
+	}
+}
 
 
 // Orthodox Canonical Form
@@ -91,6 +103,7 @@ void Client::processRequest() {
 
 	RequestHandler handler(_request, _response, *_serverConfig);
 	CgiHandler* cgi = new CgiHandler(_request, _response);
+	cgi->setRemoteAddr(ipToString(_address));
 	bool handled = false;
 	if (handler.startCgiIfNeeded(*cgi, handled)) {
 		_cgi = cgi;
@@ -111,6 +124,8 @@ void Client::processRequest() {
 }
 
 void Client::prepareResponse() {
+	if (_request.getMethod() == "HEAD")
+		_response.setSuppressBody(true);
 	_writeBuffer = _response.build();
 }
 
@@ -227,6 +242,8 @@ void Client::setFd(int fd) {
 
 void Client::setServerConfig(ServerConfig* config) {
 	_serverConfig = config;
+	if (config != NULL)
+		_request.setMaxBodySize(config->getClientMaxBodySize());
 }
 
 void Client::setKeepAlive(bool keepAlive) {

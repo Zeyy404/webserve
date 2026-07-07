@@ -27,6 +27,7 @@ Options:
 """
 
 import socket
+import select
 import sys
 import os
 import time
@@ -762,19 +763,62 @@ def test_26_cgi_post_chunked():
 
 def test_27_client_max_body_size():
     header("7. ERROR HANDLING & BODY SIZE LIMITS")
-    big_body = b"x" * (2 * 1024 * 1024)  # 2MB - default config has 1MB limit on 8080
-    status, headers, body = http_request(
-        "POST", "/",
-        body=big_body,
-        timeout=10
-    )
-    if status is None:
-        skip_msg("Body size limit", "server not reachable/connection died"); return
-    code = status.split()[1] if len(status.split()) > 1 else ""
-    if code == "413":
-        pass_msg("client_max_body_size enforced: 2MB POST returns 413")
+    # default.conf: 10MB limit on PORT (8080), 2MB on PORT2 (8081).
+    # The server rejects a declared oversized Content-Length as soon as the
+    # headers are parsed, so only headers need to be sent.
+    for port, limit_label, declared in ((PORT, "10MB", 11 * 1024 * 1024),
+                                        (PORT2, "2MB", 3 * 1024 * 1024)):
+        req = (f"POST / HTTP/1.1\r\nHost: {HOST}:{port}\r\n"
+               f"Content-Length: {declared}\r\n\r\n").encode()
+        status, headers, body = raw_request(HOST, port, req, timeout=10)
+        if status is None:
+            skip_msg(f"Body size limit on :{port}", "server not reachable"); continue
+        code = status.split()[1] if len(status.split()) > 1 else ""
+        if code == "413":
+            pass_msg(f"Port {port} ({limit_label} limit): declared {declared}B -> 413 (early, before body)")
+        else:
+            fail_msg(f"Port {port} body size limit", f"declared {declared}B, expected 413, got {code}")
+
+    # Chunked body has no declared length: the limit must trip mid-stream.
+    section("Chunked body over the limit")
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(10)
+    resp = b""
+    try:
+        s.connect((HOST, PORT2))
+        s.sendall((f"POST / HTTP/1.1\r\nHost: {HOST}:{PORT2}\r\n"
+                   "Transfer-Encoding: chunked\r\n\r\n").encode())
+        chunk = b"x" * 65536
+        frame = b"10000\r\n" + chunk + b"\r\n"
+        sent = 0
+        while sent < 3 * 1024 * 1024 and not resp:
+            try:
+                s.sendall(frame)
+            except OSError:
+                break  # server already responded and closed
+            sent += len(chunk)
+            readable, _, _ = select.select([s], [], [], 0)
+            if readable:
+                try:
+                    resp = s.recv(4096)
+                except OSError:
+                    break
+        if not resp:
+            try:
+                resp = s.recv(4096)
+            except OSError:
+                resp = b""
+    except (socket.timeout, ConnectionRefusedError, OSError):
+        pass
+    finally:
+        s.close()
+    first_line = resp.split(b"\r\n")[0] if resp else b""
+    if b" 413 " in first_line + b" ":
+        pass_msg("Chunked upload over the limit rejected mid-stream with 413")
+    elif resp:
+        fail_msg("Chunked body over limit", "expected 413, got: " + first_line[:60].decode("latin-1"))
     else:
-        fail_msg("client_max_body_size enforced", f"sent 2MB, expected 413, got {code}")
+        fail_msg("Chunked body over limit", "no response before 3MB was sent")
 
 def test_28_method_not_allowed_405():
     section("405 Method Not Allowed")
@@ -860,33 +904,39 @@ def test_32_multi_port_independence():
 def test_33_different_body_sizes():
     section("Different client_max_body_size per server")
 
-    # Port 8080: 1MB limit; Port 8081: 2MB limit
+    # default.conf: Port 8080 has a 10MB limit; Port 8081 has a 2MB limit.
+    # The same 1.5MB body must be accepted by both, and a declared 3MB body
+    # must be rejected only by the stricter server.
     body_15mb = b"x" * (1500 * 1024)  # 1.5MB
 
     status1, h1, b1 = http_request("POST", "/", body=body_15mb, port=PORT, timeout=10)
     status2, h2, b2 = http_request("POST", "/", body=body_15mb, port=PORT2, timeout=10)
 
-    if status1:
-        code1 = status1.split()[1] if len(status1.split()) > 1 else ""
-        if code1 == "413":
-            pass_msg(f"Port {PORT} (1MB limit) rejects 1.5MB -> 413")
+    for port, limit_label, status in ((PORT, "10MB", status1), (PORT2, "2MB", status2)):
+        if not status:
+            skip_msg(f"Port {port} body size test", "no response")
+            continue
+        code = status.split()[1] if len(status.split()) > 1 else ""
+        if code in ("200", "201", "202", "204"):
+            pass_msg(f"Port {port} ({limit_label} limit) accepts 1.5MB -> {code}")
+        elif code == "403":
+            pass_msg(f"Port {port} ({limit_label} limit) accepts 1.5MB -> 403 (no upload_path configured for this route)")
+        elif code == "413":
+            fail_msg(f"Port {port} ({limit_label} limit) accepts 1.5MB", "got 413 (should accept)")
         else:
-            fail_msg(f"Port {PORT} (1MB limit) rejects 1.5MB", f"got {code1}")
-    else:
-        skip_msg(f"Port {PORT} body size test", "no response")
+            fail_msg(f"Port {port} ({limit_label} limit) accepts 1.5MB", f"got {code}")
 
-    if status2:
-        code2 = status2.split()[1] if len(status2.split()) > 1 else ""
-        if code2 in ("200", "201", "202", "204"):
-            pass_msg(f"Port {PORT2} (2MB limit) accepts 1.5MB -> {code2}")
-        elif code2 == "413":
-            fail_msg(f"Port {PORT2} (2MB limit) accepts 1.5MB", f"got 413 (should accept)")
-        elif code2 == "403":
-            pass_msg(f"Port {PORT2} (2MB limit) accepts 1.5MB -> 403 (no upload_path configured for this route)")
+    req = (f"POST / HTTP/1.1\r\nHost: {HOST}:{PORT2}\r\n"
+           f"Content-Length: {3 * 1024 * 1024}\r\n\r\n").encode()
+    status3, h3, b3 = raw_request(HOST, PORT2, req, timeout=10)
+    if status3:
+        code3 = status3.split()[1] if len(status3.split()) > 1 else ""
+        if code3 == "413":
+            pass_msg(f"Port {PORT2} (2MB limit) rejects declared 3MB -> 413")
         else:
-            fail_msg(f"Port {PORT2} (2MB limit) accepts 1.5MB", f"got {code2}")
+            fail_msg(f"Port {PORT2} (2MB limit) rejects declared 3MB", f"got {code3}")
     else:
-        skip_msg(f"Port {PORT2} body size test", "no response")
+        skip_msg(f"Port {PORT2} 3MB rejection test", "no response")
 
 # ---------------------------------------------------------------------------
 # 10. File Uploads
@@ -1339,6 +1389,157 @@ def test_57_large_response():
         skip_msg("Large file", "server not reachable")
 
 # ---------------------------------------------------------------------------
+# 16. CGI meta-variables, timeouts, status-code accuracy
+# ---------------------------------------------------------------------------
+
+def test_58_cgi_meta_variables():
+    header("16. CGI META-VARIABLES & TIMEOUTS")
+    section("PATH_INFO / REMOTE_ADDR / SERVER_PORT (RFC 3875)")
+    if not os.path.isfile(os.path.join(TEST_DIR, "cgi-bin", "env.py")):
+        skip_msg("CGI meta-variables", "cgi-bin/env.py not found"); return
+
+    status, headers, body = http_request("GET", "/cgi-bin/env.py/extra/path?x=1")
+    if status is None:
+        skip_msg("CGI meta-variables", "server not reachable"); return
+    code = status.split()[1] if len(status.split()) > 1 else ""
+    if code != "200":
+        fail_msg("CGI with PATH_INFO suffix", f"expected 200, got {code}")
+        return
+    text = body.decode("latin-1", errors="replace")
+
+    checks = {
+        "PATH_INFO is the suffix after the script": "path_info=/extra/path",
+        "SCRIPT_NAME stops at the script": "script_name=/cgi-bin/env.py",
+        "SERVER_PORT is the real listen port": f"server_port={PORT}",
+        "QUERY_STRING survives PATH_INFO": "query_string=x=1",
+    }
+    for name, needle in checks.items():
+        if needle in text:
+            pass_msg(f"CGI env: {name}")
+        else:
+            fail_msg(f"CGI env: {name}", f"'{needle}' not found in output")
+
+    m = re.search(r"remote_addr=(\S+)", text)
+    if m:
+        pass_msg(f"CGI env: REMOTE_ADDR set ({m.group(1)})")
+    else:
+        fail_msg("CGI env: REMOTE_ADDR set", "remote_addr missing or empty")
+
+def test_59_cgi_hung_script_timeout():
+    section("Hung CGI (infinite loop) must not block the server")
+    script = os.path.join(TEST_DIR, "cgi-bin", "_hang_test.py")
+    with open(script, "w") as f:
+        f.write("#!/usr/bin/env python3\nimport time\ntime.sleep(60)\n")
+    try:
+        start = time.time()
+        status, headers, body = http_request("GET", "/cgi-bin/_hang_test.py", timeout=15)
+        elapsed = time.time() - start
+        if status is None:
+            fail_msg("Hung CGI", f"no response after {elapsed:.1f}s")
+        else:
+            code = status.split()[1] if len(status.split()) > 1 else ""
+            if code in ("504", "502", "500") and elapsed < 15:
+                pass_msg(f"Hung CGI returned {code} after {elapsed:.1f}s (killed by timeout)")
+            else:
+                fail_msg("Hung CGI", f"expected 5xx within 15s, got {code} after {elapsed:.1f}s")
+
+        status2, _, _ = http_request("GET", "/", timeout=5)
+        code2 = status2.split()[1] if status2 and len(status2.split()) > 1 else ""
+        if code2 == "200":
+            pass_msg("Server still responsive after hung CGI")
+        else:
+            fail_msg("Server responsive after hung CGI", f"got {code2 or 'no response'}")
+    finally:
+        os.remove(script)
+
+def test_60_head_content_length():
+    section("HEAD Content-Length matches GET (RFC 7231)")
+    gstatus, gheaders, gbody = http_request("GET", "/")
+    hstatus, hheaders, hbody = http_request("HEAD", "/")
+    if gstatus is None or hstatus is None:
+        skip_msg("HEAD Content-Length", "server not reachable"); return
+    get_cl = gheaders.get("content-length")
+    head_cl = hheaders.get("content-length")
+    if head_cl is not None and head_cl == get_cl and int(head_cl) > 0:
+        pass_msg(f"HEAD Content-Length equals GET's ({head_cl})")
+    else:
+        fail_msg("HEAD Content-Length equals GET's", f"GET={get_cl}, HEAD={head_cl}")
+    if not hbody:
+        pass_msg("HEAD response has no body")
+    else:
+        fail_msg("HEAD response has no body", f"{len(hbody)} bytes received")
+
+def test_61_unknown_method_501():
+    section("501 for unimplemented method")
+    req = f"FOOBAR / HTTP/1.1\r\nHost: {HOST}:{PORT}\r\n\r\n".encode()
+    status, headers, body = raw_request(HOST, PORT, req)
+    if status is None:
+        skip_msg("Unknown method", "no response"); return
+    code = status.split()[1] if len(status.split()) > 1 else ""
+    if code == "501":
+        pass_msg("Unknown method FOOBAR returns 501 Not Implemented")
+    else:
+        fail_msg("Unknown method FOOBAR returns 501", f"got {code}")
+
+def test_62_sustained_load_fd_stability():
+    header("17. SUSTAINED LOAD & RESOURCE STABILITY")
+    section("15s mixed load: availability >= 99.5%, no FD leak")
+
+    def find_server_pid():
+        if SERVER_PROC:
+            return SERVER_PROC.pid
+        try:
+            out = subprocess.run(["lsof", "-ti", f"tcp:{PORT}", "-sTCP:LISTEN"],
+                                 capture_output=True, text=True, timeout=5)
+            pids = out.stdout.split()
+            return int(pids[0]) if pids else None
+        except Exception:
+            return None
+
+    def fd_count(pid):
+        proc_fd = f"/proc/{pid}/fd"
+        if os.path.isdir(proc_fd):
+            return len(os.listdir(proc_fd))
+        try:
+            out = subprocess.run(["lsof", "-p", str(pid)],
+                                 capture_output=True, text=True, timeout=10)
+            return max(len(out.stdout.splitlines()) - 1, 0)
+        except Exception:
+            return None
+
+    pid = find_server_pid()
+    http_request("GET", "/")  # warm up before the baseline snapshot
+    fd_before = fd_count(pid) if pid else None
+
+    paths = ["/", "/cgi-bin/test.py", "/uploads", "/nonexistent"]
+    total = 0
+    ok = 0
+    deadline = time.time() + 15
+    while time.time() < deadline:
+        status, headers, body = http_request("GET", paths[total % len(paths)], timeout=5)
+        total += 1
+        if status is not None:
+            ok += 1
+
+    availability = (ok / total) if total else 0.0
+    if total >= 50 and availability >= 0.995:
+        pass_msg(f"Availability {availability * 100:.2f}% over {total} mixed requests (static/CGI/autoindex/404)")
+    else:
+        fail_msg("Sustained availability", f"{ok}/{total} = {availability * 100:.2f}% (expected >= 99.5%)")
+
+    if pid is None or fd_before is None:
+        skip_msg("FD stability", "cannot determine server pid / fd count (lsof missing?)")
+        return
+    time.sleep(1)  # let in-flight sockets and CGI pipes close
+    fd_after = fd_count(pid)
+    if fd_after is None:
+        skip_msg("FD stability", "fd count unavailable after load")
+    elif fd_after - fd_before <= 8:
+        pass_msg(f"FD count stable: {fd_before} -> {fd_after} after {total} requests")
+    else:
+        fail_msg("FD stability", f"fd count grew {fd_before} -> {fd_after} (possible fd leak)")
+
+# ---------------------------------------------------------------------------
 # runner
 # ---------------------------------------------------------------------------
 
@@ -1383,10 +1584,14 @@ def all_tests():
         test_50_eval_static_website, test_51_eval_non_blocking,
         test_52_eval_accurate_status_codes, test_53_eval_default_error_pages,
         test_54_eval_file_upload_flow, test_55_eval_cgi_complete,
+        # 16. CGI meta-variables, timeouts, status codes
+        test_58_cgi_meta_variables, test_59_cgi_hung_script_timeout,
+        test_60_head_content_length, test_61_unknown_method_501,
     ]
 
 def stress_tests():
-    return [test_56_stress_concurrent, test_57_large_response]
+    return [test_56_stress_concurrent, test_57_large_response,
+            test_62_sustained_load_fd_stability]
 
 CATEGORIES = {
     "basic": [test_01_connectivity, test_02_server_identity],
@@ -1399,9 +1604,11 @@ CATEGORIES = {
                  test_18_connection_close_multiple_requests, test_19_chunked_transfer,
                  test_20_chunked_trailer],
     "cgi": [test_21_cgi_basic_get, test_22_cgi_get_query, test_23_cgi_post_body,
-            test_24_cgi_env_vars, test_25_cgi_nonexistent, test_26_cgi_post_chunked],
+            test_24_cgi_env_vars, test_25_cgi_nonexistent, test_26_cgi_post_chunked,
+            test_58_cgi_meta_variables, test_59_cgi_hung_script_timeout],
     "errors": [test_27_client_max_body_size, test_28_method_not_allowed_405,
-               test_29_http_version_not_supported, test_30_uri_too_long],
+               test_29_http_version_not_supported, test_30_uri_too_long,
+               test_60_head_content_length, test_61_unknown_method_501],
     "redirect": [test_31_redirect],
     "multiserver": [test_32_multi_port_independence, test_33_different_body_sizes],
     "upload": [test_34_file_upload_and_retrieve, test_35_empty_body_upload, test_36_upload_path_cleanup],
@@ -1415,7 +1622,8 @@ CATEGORIES = {
     "eval": [test_50_eval_static_website, test_51_eval_non_blocking,
              test_52_eval_accurate_status_codes, test_53_eval_default_error_pages,
              test_54_eval_file_upload_flow, test_55_eval_cgi_complete],
-    "stress": [test_56_stress_concurrent, test_57_large_response],
+    "stress": [test_56_stress_concurrent, test_57_large_response,
+               test_62_sustained_load_fd_stability],
 }
 
 def print_summary():

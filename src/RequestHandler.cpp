@@ -4,6 +4,7 @@
 
 #include <dirent.h>
 #include <ctime>
+#include <cstdio>
 #include <cstdlib>
 #include <unistd.h>
 #include <fstream>
@@ -197,6 +198,27 @@ namespace {
 	    }
 	    return false;
 	}
+
+	// Returns the index just past the first path segment whose extension is a
+	// registered CGI extension for the route (the CGI script), so that the rest
+	// of the path can be exposed to the CGI as PATH_INFO. npos when no segment
+	// maps to a CGI script.
+	static size_t findCgiSplit(const std::string& path, const Route& route) {
+		size_t segStart = 0;
+		while (segStart < path.size()) {
+			size_t segEnd = path.find('/', segStart + 1);
+			if (segEnd == std::string::npos)
+				segEnd = path.size();
+			size_t dot = path.rfind('.', segEnd - 1);
+			if (dot != std::string::npos && dot > segStart) {
+				std::string ext = path.substr(dot, segEnd - dot);
+				if (route.hasCgiExtension(ext))
+					return segEnd;
+			}
+			segStart = segEnd;
+		}
+		return std::string::npos;
+	}
 }
 
 // Orthodox Canonical Form
@@ -244,7 +266,13 @@ void RequestHandler::handle() {
 		return;
 	}
 
-	if (!isAllowedMethod(_request.getMethod())) {
+	const std::string& method = _request.getMethod();
+	if (method != "GET" && method != "POST" && method != "DELETE" && method != "HEAD") {
+		handleError(501);
+		return;
+	}
+
+	if (!isAllowedMethod(method)) {
 		handleError(405);
 		return;
 	}
@@ -279,10 +307,15 @@ bool RequestHandler::startCgiIfNeeded(CgiHandler& cgi, bool& handled) {
 	if (!isAllowedMethod(_request.getMethod()))
 		return false;
 
-	std::string scriptPath = resolveFilePath();
-	if (scriptPath.empty())
+	std::string reqPath = urlDecode(_request.getPath());
+	size_t split = findCgiSplit(reqPath, *_route);
+	if (split == std::string::npos)
 		return false;
-	if (!CgiHandler::isCgiRequest(scriptPath, *_route))
+
+	std::string scriptUri = reqPath.substr(0, split);
+	std::string pathInfo = reqPath.substr(split);
+	std::string scriptPath = resolveDecodedPath(scriptUri);
+	if (scriptPath.empty())
 		return false;
 
 	handled = true;
@@ -290,12 +323,24 @@ bool RequestHandler::startCgiIfNeeded(CgiHandler& cgi, bool& handled) {
 		handleError(404);
 		return false;
 	}
+
+	std::string root = _config.getRoot();
+	if (!_route->getRoot().empty())
+		root = _route->getRoot();
+	if (!root.empty() && root[root.size() - 1] == '/')
+		root.erase(root.size() - 1);
+
+	// The child inherits these through its environment, so they must be set
+	// before start() forks.
+	cgi.setServerPort(_config.getPort());
+	cgi.setScriptName(scriptUri);
+	cgi.setPathInfo(pathInfo, pathInfo.empty() ? "" : root + pathInfo);
+
 	if (!cgi.start(scriptPath, *_route)) {
 		if (_response.getStatusCode() == 200)
 			handleError(502);
 		return false;
 	}
-	cgi.setServerPort(_config.getPort());
 	return true;
 }
 
@@ -337,12 +382,6 @@ void RequestHandler::handlePost() {
 void RequestHandler::handleDelete() {
 	std::string filePath = resolveFilePath();
 
-	Session* session = _request.getSession();
-	if (session == NULL || !session->hasKey("username"))
-	{
-		handleError(403);
-		return;
-	}	
 	if (filePath.empty()) {
 		handleError(403);
 		return;
@@ -359,20 +398,24 @@ void RequestHandler::handleDelete() {
 		handleError(403);
 		return;
 	}
-	if (::unlink(filePath.c_str()) != 0) {
+	if (std::remove(filePath.c_str()) != 0) {
 		handleError(403);
 		return;
 	}
-	
-	std::string urlPath = "/uploads/" + baseName(filePath);
-	FileRegistry::getInstance().unregisterFile(session->getValue("username"), urlPath);
+
+	Session* session = _request.getSession();
+	if (session != NULL && session->hasKey("username")) {
+		std::string urlPath = "/uploads/" + baseName(filePath);
+		FileRegistry::getInstance().unregisterFile(session->getValue("username"), urlPath);
+	}
 	_response.setStatusCode(204);
 	_response.setBody("");
 }
 
 void RequestHandler::handleHead() {
+	// Same as GET; the body is dropped at build time (Client::prepareResponse)
+	// so Content-Length still reflects the entity size, as RFC 7231 requires.
 	handleGet();
-	_response.setBody("");
 }
 
 void RequestHandler::handleSession() {
@@ -517,13 +560,6 @@ void RequestHandler::handleRedirect(const std::string& location) {
 }
 
 void RequestHandler::handleFileUpload() {
-	Session* session = _request.getSession();
-	if (session == NULL || !session->hasKey("username")) {
-		handleError(401);
-		return;
-	}
-
-	std::string username = session->getValue("username");
 	if (_route == NULL || _route->getUploadPath().empty()) {
 		handleError(403);
 		return;
@@ -560,20 +596,32 @@ void RequestHandler::handleFileUpload() {
 	}
 	
 	std::string url = "/uploads/" + sanitizeFileName(filename);
-	FileRegistry::getInstance().registerFile(session->getValue("username"), url);
-
-	_response.setStatusCode(303);
-	_response.setLocation("/my-uploads");
-	_response.setContentType("text/plain");
-	_response.setBody("Uploaded\n");
+	Session* session = _request.getSession();
+	if (session != NULL && session->hasKey("username")) {
+		// Logged-in browser flow: track the file and bounce to the listing page.
+		FileRegistry::getInstance().registerFile(session->getValue("username"), url);
+		_response.setStatusCode(303);
+		_response.setLocation("/my-uploads");
+		_response.setContentType("text/plain");
+		_response.setBody("Uploaded\n");
+	} else {
+		_response.setStatusCode(201);
+		_response.setLocation(url);
+		_response.setContentType("text/plain");
+		_response.setBody("Created\n");
+	}
 }
 
 std::string RequestHandler::resolveFilePath() {
+	return resolveDecodedPath(urlDecode(_request.getPath()));
+}
+
+std::string RequestHandler::resolveDecodedPath(const std::string& decodedPath) {
 	std::string root = _config.getRoot();
 	if (_route != NULL && !_route->getRoot().empty())
 		root = _route->getRoot();
 
-	std::string reqPath = urlDecode(_request.getPath());
+	std::string reqPath = decodedPath;
 	if (reqPath.empty())
 		reqPath = "/";
 

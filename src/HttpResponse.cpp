@@ -16,7 +16,7 @@
 #include <ctime>
 
 // Orthodox Canonical Form
-HttpResponse::HttpResponse() : _statusCode(200), _statusMessage("OK"), _httpVersion("HTTP/1.1"), _setCookie(false), _cookieHeader("") {
+HttpResponse::HttpResponse() : _statusCode(200), _statusMessage("OK"), _httpVersion("HTTP/1.1"), _setCookie(false), _cookieHeader(""), _suppressBody(false) {
 	setDefaultHeaders();
 }
 
@@ -33,6 +33,7 @@ HttpResponse& HttpResponse::operator=(const HttpResponse& other) {
 		_body = other._body;
 		_setCookie = other._setCookie;
 		_cookieHeader = other._cookieHeader;
+		_suppressBody = other._suppressBody;
 	}
 	return *this;
 }
@@ -60,6 +61,10 @@ void HttpResponse::setCookieHeader(const std::string& cookie) {
 	addHeader("Set-Cookie", cookie);
 }
 
+void HttpResponse::setSuppressBody(bool suppress) {
+	_suppressBody = suppress;
+}
+
 // Getters
 int HttpResponse::getStatusCode() const {
 	return _statusCode;
@@ -81,6 +86,8 @@ const std::string& HttpResponse::getCookieHeader() const {
 std::string HttpResponse::build() {
 	setContentLength(_body.size());
 	addHeader("Date", getHttpDate());
+	if (_suppressBody)
+		return buildHeaders();
 	return buildHeaders() + _body;
 }
 
@@ -101,6 +108,7 @@ void HttpResponse::clear() {
 	_body.clear();
 	_setCookie = false;
 	_cookieHeader.clear();
+	_suppressBody = false;
 	setDefaultHeaders();
 }
 
@@ -142,16 +150,21 @@ std::string HttpResponse::getStatusMessage(int code) const {
 		case 303: return "See Other";
 		case 307: return "Temporary Redirect";
 		case 400: return "Bad Request";
+		case 401: return "Unauthorized";
 		case 403: return "Forbidden";
 		case 404: return "Not Found";
 		case 405: return "Method Not Allowed";
 		case 409: return "Conflict";
 		case 413: return "Payload Too Large";
+		case 414: return "URI Too Long";
+		case 415: return "Unsupported Media Type";
+		case 431: return "Request Header Fields Too Large";
 		case 500: return "Internal Server Error";
+		case 501: return "Not Implemented";
 		case 502: return "Bad Gateway";
 		case 503: return "Service Unavailable";
 		case 504: return "Gateway Timeout";
-		case 501: return "Not Implemented";
+		case 505: return "HTTP Version Not Supported";
 		default: return "Unknown";
 	}
 }

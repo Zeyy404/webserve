@@ -43,6 +43,8 @@ public:
 
 	// Utility methods
 	std::string		getErrorPage(int code) const;
+	// Longest-prefix match over the configured location blocks ("/uploads"
+	// beats "/" for /uploads/x). NULL when no route matches.
 	Route*			matchRoute(const std::string& path);
 };
 

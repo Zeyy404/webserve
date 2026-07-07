@@ -56,10 +56,15 @@ namespace {
 		}
 		return true;
 	}
+
+	// Caps on the request line and header section so a client that never
+	// terminates its headers cannot grow the buffer without bound.
+	const size_t MAX_REQUEST_LINE = 8192;
+	const size_t MAX_HEADER_SECTION = 32768;
 }
 
 // Orthodox Canonical Form
-HttpRequest::HttpRequest() : _httpVersion("HTTP/1.1"), _isComplete(false), _isChunked(false), _isValid(true), _errorCode(0), _contentLength(0), _session(NULL), _sessionId("") {}
+HttpRequest::HttpRequest() : _httpVersion("HTTP/1.1"), _isComplete(false), _isChunked(false), _isValid(true), _errorCode(0), _contentLength(0), _maxBodySize(0), _session(NULL), _sessionId("") {}
 
 
 HttpRequest::HttpRequest(const HttpRequest& other) {
@@ -79,6 +84,7 @@ HttpRequest& HttpRequest::operator=(const HttpRequest& other) {
 		_isValid = other._isValid;
 		_errorCode = other._errorCode;
 		_contentLength = other._contentLength;
+		_maxBodySize = other._maxBodySize;
 		_rawRequest = other._rawRequest;
 		_session = other._session;
 		_sessionId = other._sessionId;
@@ -100,8 +106,17 @@ bool HttpRequest::parse(const std::string& rawRequest) {
 		headerEnd = rawRequest.find("\n\n");
 		sepLength = 2;
 	}
-	if (headerEnd == std::string::npos)
+	if (headerEnd == std::string::npos) {
+		// Headers not terminated yet: reject early if what has arrived already
+		// exceeds the caps, instead of buffering forever.
+		if (rawRequest.find('\n') == std::string::npos && rawRequest.size() > MAX_REQUEST_LINE)
+			return setError(414);
+		if (rawRequest.size() > MAX_HEADER_SECTION)
+			return setError(431);
 		return true;
+	}
+	if (headerEnd > MAX_HEADER_SECTION)
+		return setError(431);
 
 	std::string headerSection = rawRequest.substr(0, headerEnd);
 	std::string bodySection = rawRequest.substr(headerEnd + sepLength);
@@ -122,6 +137,9 @@ bool HttpRequest::parse(const std::string& rawRequest) {
 		headers = headerSection.substr(lineEnd + lineSep);
 	}
 
+	if (requestLine.size() > MAX_REQUEST_LINE)
+		return setError(414);
+
 	parseRequestLine(requestLine);
 	if (!_isValid) {
 		_isComplete = true;
@@ -132,12 +150,12 @@ bool HttpRequest::parse(const std::string& rawRequest) {
 		_isComplete = true;
 		return false;
 	}
-	if (_httpVersion == "HTTP/1.1" && (!hasHeader("host") || getHeader("host").empty())) {
-		_isValid = false;
-		_errorCode = 400;
-		_isComplete = true;
-		return false;
-	}
+	if (_httpVersion == "HTTP/1.1" && (!hasHeader("host") || getHeader("host").empty()))
+		return setError(400);
+
+	// Reject a declared oversized body before buffering it.
+	if (_maxBodySize > 0 && !_isChunked && _contentLength > _maxBodySize)
+		return setError(413);
 
 	if (_isChunked) {
 		parseChunkedBody(bodySection);
@@ -159,6 +177,17 @@ void HttpRequest::appendData(const std::string& data) {
 	_rawRequest.append(data);
 	std::string rawRequest = _rawRequest;
 	parse(rawRequest);
+}
+
+bool HttpRequest::setError(int code) {
+	_isValid = false;
+	_errorCode = code;
+	_isComplete = true;
+	return false;
+}
+
+void HttpRequest::setMaxBodySize(size_t maxBodySize) {
+	_maxBodySize = maxBodySize;
 }
 
 bool HttpRequest::isComplete() const {
@@ -199,10 +228,15 @@ void HttpRequest::parseRequestLine(const std::string& line) {
 		_errorCode = 400;
 		return;
 	}
-	if (!isToken(_method) || _uri.empty() || _uri[0] != '/' ||
-		(_httpVersion != "HTTP/1.0" && _httpVersion != "HTTP/1.1")) {
+	if (!isToken(_method) || _uri.empty() || _uri[0] != '/') {
 		_isValid = false;
 		_errorCode = 400;
+		return;
+	}
+	if (_httpVersion != "HTTP/1.0" && _httpVersion != "HTTP/1.1") {
+		_isValid = false;
+		// A well-formed but unsupported HTTP version is 505; garbage is 400.
+		_errorCode = (_httpVersion.compare(0, 5, "HTTP/") == 0) ? 505 : 400;
 		return;
 	}
 	parseUri();
@@ -341,6 +375,10 @@ void HttpRequest::parseChunkedBody(const std::string& bodySection) {
 		if (bodySection.size() < pos + chunkSize)
 			return;
 		decoded.append(bodySection, pos, chunkSize);
+		if (_maxBodySize > 0 && decoded.size() > _maxBodySize) {
+			setError(413);
+			return;
+		}
 		pos += chunkSize;
 
 		if (bodySection.compare(pos, 2, "\r\n") == 0)

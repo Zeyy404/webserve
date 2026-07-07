@@ -87,6 +87,11 @@ CgiHandler::CgiHandler(const CgiHandler& other) : _request(other._request), _res
 	_inputWritten = other._inputWritten;
 	_input = other._input;
 	_startTime = other._startTime;
+	_serverPort = other._serverPort;
+	_scriptName = other._scriptName;
+	_pathInfo = other._pathInfo;
+	_pathTranslated = other._pathTranslated;
+	_remoteAddr = other._remoteAddr;
 }
 
 CgiHandler& CgiHandler::operator=(const CgiHandler& other) {
@@ -105,6 +110,11 @@ CgiHandler& CgiHandler::operator=(const CgiHandler& other) {
 		_inputWritten = other._inputWritten;
 		_input = other._input;
 		_startTime = other._startTime;
+		_serverPort = other._serverPort;
+		_scriptName = other._scriptName;
+		_pathInfo = other._pathInfo;
+		_pathTranslated = other._pathTranslated;
+		_remoteAddr = other._remoteAddr;
 	}
 	return *this;
 }
@@ -216,8 +226,15 @@ ssize_t CgiHandler::writeInput() {
 			closeInput();
 		return bytes;
 	}
-	if (bytes < 0)
-		closeInput();
+	if (bytes < 0) {
+		// A failed write may be transient (pipe buffer full): keep stdin open and
+		// retry on the next readiness event. Closing here would send a truncated
+		// body followed by EOF. Only give up if the child is already gone.
+		if (!_processDone && _pid > 0 && ::waitpid(_pid, &_exitStatus, WNOHANG) == _pid)
+			_processDone = true;
+		if (_processDone)
+			closeInput();
+	}
 	return bytes;
 }
 
@@ -230,8 +247,8 @@ ssize_t CgiHandler::readOutput() {
 		_output.append(buffer, static_cast<size_t>(bytes));
 	else if (bytes == 0)
 		closeOutput();
-	else
-		closeOutput();
+	// bytes < 0 may be transient: retry on the next readiness event.
+	// A hung pipe is bounded by the CGI timeout.
 	return bytes;
 }
 
@@ -308,11 +325,13 @@ void CgiHandler::setupEnvironment(const Route& route) {
 	_env["SERVER_PORT"] = toString(_serverPort);
 	_env["REQUEST_METHOD"] = _request.getMethod();
 	_env["REQUEST_URI"] = _request.getUri();
-	_env["SCRIPT_NAME"] = _request.getPath();
+	_env["SCRIPT_NAME"] = _scriptName.empty() ? _request.getPath() : _scriptName;
 	_env["SCRIPT_FILENAME"] = _scriptPath;
 	_env["QUERY_STRING"] = _request.getQueryString();
-	_env["PATH_INFO"] = "";
-	_env["PATH_TRANSLATED"] = "";
+	_env["PATH_INFO"] = _pathInfo;
+	_env["PATH_TRANSLATED"] = _pathInfo.empty() ? "" : _pathTranslated;
+	if (!_remoteAddr.empty())
+		_env["REMOTE_ADDR"] = _remoteAddr;
 	_env["REDIRECT_STATUS"] = "200";
 	_env["CONTENT_LENGTH"] = toString(_request.getBody().size());
 	if (_request.hasHeader("content-type"))
@@ -424,6 +443,19 @@ bool CgiHandler::wantsOutputRead() const {
 // Setters
 void CgiHandler::setServerPort(int port) {
 	_serverPort = port;
+}
+
+void CgiHandler::setScriptName(const std::string& scriptName) {
+	_scriptName = scriptName;
+}
+
+void CgiHandler::setPathInfo(const std::string& pathInfo, const std::string& pathTranslated) {
+	_pathInfo = pathInfo;
+	_pathTranslated = pathTranslated;
+}
+
+void CgiHandler::setRemoteAddr(const std::string& remoteAddr) {
+	_remoteAddr = remoteAddr;
 }
 
 // Static utility methods
