@@ -272,12 +272,20 @@ void RequestHandler::handle() {
   	}
 
 	if (_request.getMethod() == "GET") {
-        if (_request.getPath() == "/uploads/public" ||
-            _request.getPath().rfind("/uploads/user/", 0) == 0) {
-            handleMyUploads();
-            return;
-        }
-    }
+		if (_request.getPath() == "/uploads/public") {
+			handleMyUploads();
+			return;
+		}
+		if (_request.getPath().rfind("/uploads/user/", 0) == 0) {
+			const std::string prefix = "/uploads/user/";
+			size_t start = prefix.size();
+			size_t nextSlash = _request.getPath().find('/', start);
+			if (nextSlash == std::string::npos) {
+				handleMyUploads();
+				return;
+			}
+		}
+	}
 
     if (_request.getPath() == "/my-uploads" && _request.getMethod() == "GET") {
         handleMyUploads();
