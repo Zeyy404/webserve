@@ -621,6 +621,8 @@ void RequestHandler::handleFileUpload() {
 		_response.setContentType("text/plain");
 		_response.setBody("Uploaded\n");
 	} else {
+		_response.setStatusCode(201);
+		_response.setLocation(url);
 		FileRegistry::getInstance().registerFile(url);
 		_response.setStatusCode(201);
 		_response.setLocation("/my-uploads");
