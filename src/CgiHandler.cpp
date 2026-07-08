@@ -227,9 +227,6 @@ ssize_t CgiHandler::writeInput() {
 		return bytes;
 	}
 	if (bytes < 0) {
-		// A failed write may be transient (pipe buffer full): keep stdin open and
-		// retry on the next readiness event. Closing here would send a truncated
-		// body followed by EOF. Only give up if the child is already gone.
 		if (!_processDone && _pid > 0 && ::waitpid(_pid, &_exitStatus, WNOHANG) == _pid)
 			_processDone = true;
 		if (_processDone)
@@ -247,8 +244,6 @@ ssize_t CgiHandler::readOutput() {
 		_output.append(buffer, static_cast<size_t>(bytes));
 	else if (bytes == 0)
 		closeOutput();
-	// bytes < 0 may be transient: retry on the next readiness event.
-	// A hung pipe is bounded by the CGI timeout.
 	return bytes;
 }
 

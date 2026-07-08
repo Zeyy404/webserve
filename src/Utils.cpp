@@ -263,10 +263,10 @@ std::string normalizePath(const std::string& path)
 
 	while (std::getline(ss, token, '/')) {
 		if (token == "" || token == ".")
-			continue;          // skip empty parts and "current dir" dots
+			continue;          
 		else if (token == "..") {
 			if (!parts.empty())
-				parts.pop_back(); // go up one level
+				parts.pop_back();
 		} else {
 			parts.push_back(token);
 		}
@@ -288,7 +288,6 @@ std::string normalizePath(const std::string& path)
 		if (path2.empty())
 			return path1;
 
-		// avoid double slashes at the join point
 		bool p1HasSlash = path1[path1.size() - 1] == '/';
 		bool p2HasSlash = path2[0] == '/';
 
@@ -338,7 +337,7 @@ std::string normalizePath(const std::string& path)
 			return "video/mp4";
 		if (extension == "mp3")
 			return "audio/mpeg";
-		return "application/octet-stream"; // unknown → raw binary
+		return "application/octet-stream";
 	}
 
 	std::string getDefaultMimeType() 
@@ -356,7 +355,6 @@ std::string normalizePath(const std::string& path)
 	{
 		struct tm* gmt = std::gmtime(&time);
 		char buf[64];
-		// HTTP date format: "Mon, 04 Jun 2026 10:00:00 GMT"
 		std::strftime(buf, sizeof(buf), "%a, %d %b %Y %H:%M:%S GMT", gmt);
 		return std::string(buf);
 	}
@@ -394,7 +392,6 @@ std::string normalizePath(const std::string& path)
 		return (code >= 100 && code <= 599);
 	}
 
-	// Encoding
 	std::string base64Encode(const std::string& input) 
 	{
 		const std::string chars =
@@ -413,7 +410,6 @@ std::string normalizePath(const std::string& path)
 			}
 		}
 
-		// add padding '=' if needed
 		if (valb > -6)
 			result.push_back(chars[((val << 8) >> (valb + 8)) & 0x3F]);
 		while (result.size() % 4)
@@ -430,7 +426,6 @@ std::string normalizePath(const std::string& path)
 		std::string result;
 		std::vector<int> T(256, -1);
 
-		// build lookup table
 		for (int i = 0; i < 64; ++i)
 			T[static_cast<unsigned char>(chars[i])] = i;
 
@@ -440,7 +435,7 @@ std::string normalizePath(const std::string& path)
 		for (size_t i = 0; i < input.size(); ++i) {
 			unsigned char c = static_cast<unsigned char>(input[i]);
 			if (T[c] == -1)
-				break; // invalid or padding character
+				break;
 			val = (val << 6) + T[c];
 			valb += 6;
 			if (valb >= 0) {
@@ -458,8 +453,8 @@ std::string normalizePath(const std::string& path)
 
 		for (size_t i = 0; i < input.size(); ++i) {
 			unsigned char c = static_cast<unsigned char>(input[i]);
-			result.push_back(hexChars[c >> 4]);   // high 4 bits
-			result.push_back(hexChars[c & 0x0F]); // low 4 bits
+			result.push_back(hexChars[c >> 4]);
+			result.push_back(hexChars[c & 0x0F]);
 		}
 		return result;
 	}
@@ -469,7 +464,6 @@ std::string normalizePath(const std::string& path)
 		std::string result;
 
 		for (size_t i = 0; i + 1 < input.size(); i += 2) {
-			// convert each pair of hex chars back to a byte
 			std::string byte = input.substr(i, 2);
 			char c = static_cast<char>(std::strtol(byte.c_str(), NULL, 16));
 			result.push_back(c);

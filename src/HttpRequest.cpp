@@ -57,8 +57,6 @@ namespace {
 		return true;
 	}
 
-	// Caps on the request line and header section so a client that never
-	// terminates its headers cannot grow the buffer without bound.
 	const size_t MAX_REQUEST_LINE = 8192;
 	const size_t MAX_HEADER_SECTION = 32768;
 }
@@ -107,8 +105,6 @@ bool HttpRequest::parse(const std::string& rawRequest) {
 		sepLength = 2;
 	}
 	if (headerEnd == std::string::npos) {
-		// Headers not terminated yet: reject early if what has arrived already
-		// exceeds the caps, instead of buffering forever.
 		if (rawRequest.find('\n') == std::string::npos && rawRequest.size() > MAX_REQUEST_LINE)
 			return setError(414);
 		if (rawRequest.size() > MAX_HEADER_SECTION)
@@ -153,7 +149,6 @@ bool HttpRequest::parse(const std::string& rawRequest) {
 	if (_httpVersion == "HTTP/1.1" && (!hasHeader("host") || getHeader("host").empty()))
 		return setError(400);
 
-	// Reject a declared oversized body before buffering it.
 	if (_maxBodySize > 0 && !_isChunked && _contentLength > _maxBodySize)
 		return setError(413);
 
@@ -235,7 +230,6 @@ void HttpRequest::parseRequestLine(const std::string& line) {
 	}
 	if (_httpVersion != "HTTP/1.0" && _httpVersion != "HTTP/1.1") {
 		_isValid = false;
-		// A well-formed but unsupported HTTP version is 505; garbage is 400.
 		_errorCode = (_httpVersion.compare(0, 5, "HTTP/") == 0) ? 505 : 400;
 		return;
 	}

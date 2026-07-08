@@ -103,10 +103,6 @@ namespace {
 		return false;
 	}
 
-	// Returns the index just past the first path segment whose extension is a
-	// registered CGI extension for the route (the CGI script), so that the rest
-	// of the path can be exposed to the CGI as PATH_INFO. npos when no segment
-	// maps to a CGI script.
 	static size_t findCgiSplit(const std::string& path, const Route& route) {
 		size_t segStart = 0;
 		while (segStart < path.size()) {
@@ -223,8 +219,6 @@ bool RequestHandler::startCgiIfNeeded(CgiHandler& cgi, bool& handled) {
 	if (!root.empty() && root[root.size() - 1] == '/')
 		root.erase(root.size() - 1);
 
-	// The child inherits these through its environment, so they must be set
-	// before start() forks.
 	cgi.setServerPort(_config.getPort());
 	cgi.setScriptName(scriptUri);
 	cgi.setPathInfo(pathInfo, pathInfo.empty() ? "" : root + pathInfo);
@@ -313,8 +307,6 @@ void RequestHandler::handleDelete() {
 }
 
 void RequestHandler::handleHead() {
-	// Same as GET; the body is dropped at build time (Client::prepareResponse)
-	// so Content-Length still reflects the entity size, as RFC 7231 requires.
 	handleGet();
 }
 

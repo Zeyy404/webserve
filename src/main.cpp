@@ -34,7 +34,6 @@ void printUsage(const char* programName) {
 int main(int argc, char* argv[]) {
 	std::string configFile;
 
-	// Parse command line arguments
 	if (argc > 2) {
 		std::cerr << "Error: Too many arguments" << std::endl;
 		printUsage(argv[0]);
