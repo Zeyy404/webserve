@@ -54,6 +54,9 @@ public:
 	void		appendData(const std::string& data);
 	bool		isComplete() const;
 	bool		isValid() const;
+	// True once headers are parsed and the client asked for 100-continue but
+	// the (valid, still-incomplete) body has not yet been received.
+	bool		expects100Continue() const;
 	int			getErrorCode() const;
 	void		clear();
 

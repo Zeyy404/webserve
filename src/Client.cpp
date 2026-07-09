@@ -19,10 +19,10 @@ namespace {
 
 
 // Orthodox Canonical Form
-Client::Client() : _fd(-1), _writeOffset(0), _keepAlive(true), _lastActivity(std::time(NULL)), _serverConfig(NULL), _cgi(NULL) {
+Client::Client() : _fd(-1), _writeOffset(0), _continueSent(false), _keepAlive(true), _lastActivity(std::time(NULL)), _serverConfig(NULL), _cgi(NULL) {
 }
 
-Client::Client(int fd, const struct sockaddr_in& address) : _fd(fd), _address(address), _writeOffset(0), _keepAlive(true), _lastActivity(std::time(NULL)), _serverConfig(NULL), _cgi(NULL) {
+Client::Client(int fd, const struct sockaddr_in& address) : _fd(fd), _address(address), _writeOffset(0), _continueSent(false), _keepAlive(true), _lastActivity(std::time(NULL)), _serverConfig(NULL), _cgi(NULL) {
 }
 
 Client::Client(const Client& other) {
@@ -38,6 +38,7 @@ Client& Client::operator=(const Client& other) {
 		_readBuffer = other._readBuffer;
 		_writeBuffer = other._writeBuffer;
 		_writeOffset = other._writeOffset;
+		_continueSent = other._continueSent;
 		_keepAlive = other._keepAlive;
 		_lastActivity = other._lastActivity;
 		_serverConfig = other._serverConfig;
@@ -60,6 +61,11 @@ ssize_t Client::read() {
 	ssize_t bytes = ::recv(_fd, buffer, sizeof(buffer), 0);
 	if (bytes > 0) {
 		_request.appendData(std::string(buffer, static_cast<size_t>(bytes)));
+		if (!_continueSent && _request.expects100Continue()) {
+			const char* cont = "HTTP/1.1 100 Continue\r\n\r\n";
+			::send(_fd, cont, 25, MSG_NOSIGNAL);
+			_continueSent = true;
+		}
 		updateLastActivity();
 		return bytes;
 	}
@@ -266,6 +272,7 @@ void Client::setKeepAlive(bool keepAlive) {
 // Buffer operations
 void Client::clearReadBuffer() {
 	_readBuffer.clear();
+	_continueSent = false;
 }
 
 void Client::clearWriteBuffer() {

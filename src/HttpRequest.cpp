@@ -254,6 +254,14 @@ bool HttpRequest::isValid() const {
 	return _isValid;
 }
 
+bool HttpRequest::expects100Continue() const {
+	if (!_headersParsed || _isComplete || !_isValid)
+		return false;
+	if (!hasHeader("expect"))
+		return false;
+	return toLowerCase(getHeader("expect")) == "100-continue";
+}
+
 int HttpRequest::getErrorCode() const {
 	return _errorCode;
 }
@@ -421,10 +429,27 @@ void HttpRequest::parseChunkedBody(const std::string& bodySection) {
 		size_t dataStart = lineEnd + sepLength;
 
 		if (chunkSize == 0) {
-			_contentLength = _body.size();
-			_isComplete = true;
-			_chunkPos = dataStart;
-			return;
+			// last-chunk: consume the optional trailer section, which is
+			// terminated by a blank line. Only complete once that final CRLF
+			// has arrived, otherwise leftover bytes corrupt the next request.
+			size_t pos = dataStart;
+			while (true) {
+				size_t trailerEnd = bodySection.find("\r\n", pos);
+				size_t trailerSep = 2;
+				if (trailerEnd == std::string::npos) {
+					trailerEnd = bodySection.find('\n', pos);
+					trailerSep = 1;
+				}
+				if (trailerEnd == std::string::npos)
+					return;
+				if (trailerEnd == pos) {
+					_chunkPos = pos + trailerSep;
+					_contentLength = _body.size();
+					_isComplete = true;
+					return;
+				}
+				pos = trailerEnd + trailerSep;
+			}
 		}
 
 		if (bodySection.size() < dataStart + chunkSize)

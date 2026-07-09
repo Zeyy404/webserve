@@ -23,6 +23,7 @@ private:
 	std::string			_readBuffer;
 	std::string			_writeBuffer;
 	size_t				_writeOffset;
+	bool				_continueSent;
 	bool				_keepAlive;
 	time_t				_lastActivity;
 	ServerConfig*		_serverConfig;
