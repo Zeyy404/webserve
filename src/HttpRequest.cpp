@@ -266,6 +266,10 @@ int HttpRequest::getErrorCode() const {
 	return _errorCode;
 }
 
+void HttpRequest::clearBody() {
+	std::string().swap(_body);
+}
+
 void HttpRequest::clear() {
 	_method.clear();
 	_uri.clear();

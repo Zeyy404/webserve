@@ -82,7 +82,6 @@ CgiHandler::CgiHandler(const CgiHandler& other) : _request(other._request), _res
 	_outputOpen = other._outputOpen;
 	_processDone = other._processDone;
 	_inputWritten = other._inputWritten;
-	_input = other._input;
 	_startTime = other._startTime;
 	_serverPort = other._serverPort;
 	_scriptName = other._scriptName;
@@ -105,7 +104,6 @@ CgiHandler& CgiHandler::operator=(const CgiHandler& other) {
 		_outputOpen = other._outputOpen;
 		_processDone = other._processDone;
 		_inputWritten = other._inputWritten;
-		_input = other._input;
 		_startTime = other._startTime;
 		_serverPort = other._serverPort;
 		_scriptName = other._scriptName;
@@ -139,7 +137,6 @@ bool CgiHandler::start(const std::string& scriptPath, const Route& route) {
 	_outputOpen = false;
 	_processDone = false;
 	_inputWritten = 0;
-	_input = _request.getBody();
 	_startTime = std::time(NULL);
 
 	if (_cgiExecutable.empty()) {
@@ -207,7 +204,7 @@ bool CgiHandler::start(const std::string& scriptPath, const Route& route) {
 	_outputFd = outputPipe[0];
 	_inputOpen = true;
 	_outputOpen = true;
-	if (_input.empty())
+	if (_request.getBody().empty())
 		closeInput();
 
 	std::ostringstream oss;
@@ -219,17 +216,21 @@ bool CgiHandler::start(const std::string& scriptPath, const Route& route) {
 ssize_t CgiHandler::writeInput() {
 	if (!_inputOpen || _inputFd < 0)
 		return 0;
-	if (_inputWritten >= _input.size()) {
+	const std::string& input = _request.getBody();
+	if (_inputWritten >= input.size()) {
 		closeInput();
 		return 0;
 	}
-	size_t remaining = _input.size() - _inputWritten;
-	size_t chunkSize = remaining > 8192 ? 8192 : remaining;
-	ssize_t bytes = ::write(_inputFd, _input.c_str() + _inputWritten, chunkSize);
+	size_t remaining = input.size() - _inputWritten;
+	size_t chunkSize = remaining > 65536 ? 65536 : remaining;
+	ssize_t bytes = ::write(_inputFd, input.c_str() + _inputWritten, chunkSize);
 	if (bytes > 0) {
 		_inputWritten += static_cast<size_t>(bytes);
-		if (_inputWritten >= _input.size())
+		_startTime = std::time(NULL);
+		if (_inputWritten >= input.size()) {
 			closeInput();
+			_request.clearBody();
+		}
 		return bytes;
 	}
 	if (bytes < 0) {
@@ -244,11 +245,12 @@ ssize_t CgiHandler::writeInput() {
 ssize_t CgiHandler::readOutput() {
 	if (!_outputOpen || _outputFd < 0)
 		return 0;
-	char buffer[8192];
+	char buffer[65536];
 	ssize_t bytes = ::read(_outputFd, buffer, sizeof(buffer));
-	if (bytes > 0)
+	if (bytes > 0) {
 		_output.append(buffer, static_cast<size_t>(bytes));
-	else if (bytes == 0)
+		_startTime = std::time(NULL);
+	} else if (bytes == 0)
 		closeOutput();
 	return bytes;
 }
@@ -375,12 +377,11 @@ void CgiHandler::parseOutput() {
 	if (headerEnd == std::string::npos) {
 		_response.setStatusCode(200);
 		_response.setContentType("text/plain");
-		_response.setBody(_output);
+		_response.setBodySwap(_output);
 		return;
 	}
 
 	std::string headerBlock = _output.substr(0, headerEnd);
-	std::string body = _output.substr(headerEnd + sepLength);
 	std::istringstream iss(headerBlock);
 	std::string line;
 	bool hasContentType = false;
@@ -407,7 +408,8 @@ void CgiHandler::parseOutput() {
 
 	if (!hasContentType)
 		_response.setContentType("text/plain");
-	_response.setBody(body);
+	_output.erase(0, headerEnd + sepLength);
+	_response.setBodySwap(_output);
 }
 
 char** CgiHandler::getEnvArray() const {

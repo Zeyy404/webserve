@@ -33,6 +33,8 @@ public:
 	void		setStatusCode(int code);
 	void		addHeader(const std::string& key, const std::string& value);
 	void		setBody(const std::string& body);
+	// Move-in a large body without copying (swaps buffers); src is left empty.
+	void		setBodySwap(std::string& body);
 	void		setCookieHeader(const std::string& cookie);
 	// For HEAD: build() omits the body from the wire output while
 	// Content-Length still reflects the entity size, as RFC 7231 requires.

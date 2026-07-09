@@ -59,6 +59,9 @@ public:
 	bool		expects100Continue() const;
 	int			getErrorCode() const;
 	void		clear();
+	// Release the (possibly large) body buffer once it is no longer needed
+	// (e.g. after it has been streamed to a CGI child).
+	void		clearBody();
 
 	// Getters
 	const std::string&					getMethod() const;

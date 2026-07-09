@@ -26,7 +26,6 @@ private:
 	bool								_outputOpen;
 	bool								_processDone;
 	size_t								_inputWritten;
-	std::string							_input;
 	int									_serverPort;
 	time_t								_startTime;
 	std::string							_scriptName;

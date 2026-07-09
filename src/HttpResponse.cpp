@@ -55,6 +55,10 @@ void HttpResponse::setBody(const std::string& body) {
 	_body = body;
 }
 
+void HttpResponse::setBodySwap(std::string& body) {
+	_body.swap(body);
+}
+
 void HttpResponse::setCookieHeader(const std::string& cookie) {
 	_setCookie = true;
 	_cookieHeader = cookie;
