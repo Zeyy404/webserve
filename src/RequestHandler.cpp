@@ -173,8 +173,6 @@ void RequestHandler::handle() {
 
 	if (_request.getMethod() == "GET")
 		handleGet();
-	else if (_request.getMethod() == "HEAD")
-		handleHead();
 	else if (_request.getMethod() == "POST")
 		handlePost();
 	else if (_request.getMethod() == "DELETE")
@@ -248,8 +246,10 @@ void RequestHandler::handleGet() {
 		if (_route != NULL && _route->getAutoindex()) {
 			generateDirectoryListing(filePath);
 			return;
+		} else {
+			handleError(403);
 		}
-		handleError(403);
+		handleError(404);
 		return;
 	}
 
@@ -304,10 +304,6 @@ void RequestHandler::handleDelete() {
 	FileRegistry::getInstance().unregisterFile(owner, "/uploads/" + diskName);
 	_response.setStatusCode(204);
 	_response.setBody("");
-}
-
-void RequestHandler::handleHead() {
-	handleGet();
 }
 
 // Private helper methods
