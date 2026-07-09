@@ -62,7 +62,7 @@ namespace {
 }
 
 // Orthodox Canonical Form
-HttpRequest::HttpRequest() : _httpVersion("HTTP/1.1"), _isComplete(false), _isChunked(false), _isValid(true), _errorCode(0), _contentLength(0), _maxBodySize(0), _headersParsed(false), _session(NULL), _sessionId("") {}
+HttpRequest::HttpRequest() : _httpVersion("HTTP/1.1"), _isComplete(false), _isChunked(false), _isValid(true), _errorCode(0), _contentLength(0), _maxBodySize(0), _headersParsed(false), _chunkPos(0), _session(NULL), _sessionId("") {}
 
 
 HttpRequest::HttpRequest(const HttpRequest& other) {
@@ -85,6 +85,7 @@ HttpRequest& HttpRequest::operator=(const HttpRequest& other) {
 		_maxBodySize = other._maxBodySize;
 		_rawRequest = other._rawRequest;
 		_headersParsed = other._headersParsed;
+		_chunkPos = other._chunkPos;
 		_session = other._session;
 		_sessionId = other._sessionId;
 	}
@@ -271,6 +272,7 @@ void HttpRequest::clear() {
 	_contentLength = 0;
 	_rawRequest.clear();
 	_headersParsed = false;
+	_chunkPos = 0;
 	_session = NULL;
 	_sessionId.clear();
 }
@@ -397,59 +399,62 @@ void HttpRequest::parseUri() {
 	_queryString = _uri.substr(queryPos + 1);
 }
 
+// Incremental chunked decoder: resumes from _chunkPos across calls, appending
+// only fully-received chunks to _body so re-invocation on each packet stays
+// O(total bytes) instead of re-decoding the whole accumulated buffer.
 void HttpRequest::parseChunkedBody(const std::string& bodySection) {
-	std::string decoded;
-	size_t pos = 0;
-
-	while (pos < bodySection.size()) {
-		size_t lineEnd = bodySection.find("\r\n", pos);
+	while (_chunkPos < bodySection.size()) {
+		size_t lineEnd = bodySection.find("\r\n", _chunkPos);
 		size_t sepLength = 2;
 		if (lineEnd == std::string::npos) {
-			lineEnd = bodySection.find('\n', pos);
+			lineEnd = bodySection.find('\n', _chunkPos);
 			sepLength = 1;
 		}
 		if (lineEnd == std::string::npos)
 			return;
 
 		size_t chunkSize = 0;
-		if (!parseHexSize(bodySection.substr(pos, lineEnd - pos), chunkSize)) {
-			_isValid = false;
-			_errorCode = 400;
-			_isComplete = true;
+		if (!parseHexSize(bodySection.substr(_chunkPos, lineEnd - _chunkPos), chunkSize)) {
+			setError(400);
 			return;
 		}
-		pos = lineEnd + sepLength;
+		size_t dataStart = lineEnd + sepLength;
 
 		if (chunkSize == 0) {
-			_body = decoded;
-			_contentLength = decoded.size();
+			_contentLength = _body.size();
 			_isComplete = true;
+			_chunkPos = dataStart;
 			return;
 		}
 
-		if (bodySection.size() < pos + chunkSize)
+		if (bodySection.size() < dataStart + chunkSize)
 			return;
-		decoded.append(bodySection, pos, chunkSize);
-		if (_maxBodySize > 0 && decoded.size() > _maxBodySize) {
+
+		size_t afterData = dataStart + chunkSize;
+		size_t sepAdvance;
+		if (afterData >= bodySection.size())
+			return;
+		if (bodySection[afterData] == '\r') {
+			if (afterData + 1 >= bodySection.size())
+				return;
+			if (bodySection[afterData + 1] != '\n') {
+				setError(400);
+				return;
+			}
+			sepAdvance = 2;
+		} else if (bodySection[afterData] == '\n') {
+			sepAdvance = 1;
+		} else {
+			setError(400);
+			return;
+		}
+
+		_body.append(bodySection, dataStart, chunkSize);
+		if (_maxBodySize > 0 && _body.size() > _maxBodySize) {
 			setError(413);
 			return;
 		}
-		pos += chunkSize;
-
-		if (pos == bodySection.size() ||
-			(pos + 1 == bodySection.size() && bodySection[pos] == '\r'))
-			return;
-
-		if (bodySection.compare(pos, 2, "\r\n") == 0)
-			pos += 2;
-		else if (bodySection[pos] == '\n')
-			pos += 1;
-		else {
-			_isValid = false;
-			_errorCode = 400;
-			_isComplete = true;
-			return;
-		}
+		_chunkPos = afterData + sepAdvance;
 	}
 }
 

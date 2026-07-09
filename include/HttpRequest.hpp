@@ -23,6 +23,7 @@ private:
 	size_t								_maxBodySize;
 	std::string							_rawRequest;
 	bool								_headersParsed;
+	size_t								_chunkPos;
 	Session*							_session;
 	std::string							_sessionId;
 
