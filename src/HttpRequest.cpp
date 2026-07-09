@@ -375,9 +375,13 @@ void HttpRequest::parseChunkedBody(const std::string& bodySection) {
 		}
 		pos += chunkSize;
 
+		if (pos == bodySection.size() ||
+			(pos + 1 == bodySection.size() && bodySection[pos] == '\r'))
+			return;
+
 		if (bodySection.compare(pos, 2, "\r\n") == 0)
 			pos += 2;
-		else if (pos < bodySection.size() && bodySection[pos] == '\n')
+		else if (bodySection[pos] == '\n')
 			pos += 1;
 		else {
 			_isValid = false;
