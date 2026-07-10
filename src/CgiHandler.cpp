@@ -1,5 +1,6 @@
 #include "../include/CgiHandler.hpp"
 #include "../include/Logger.hpp"
+#include "../include/HttpUtils.hpp"
 #include <unistd.h>
 #include <cstdlib>
 #include <cstring>
@@ -12,6 +13,10 @@
 #include <signal.h>
 #include <limits.h>
 
+using HttpUtils::trimWhitespace;
+using HttpUtils::baseName;
+using HttpUtils::dirName;
+
 namespace {
 	static const size_t SPILL_THRESHOLD = 1024 * 1024;
 
@@ -21,36 +26,12 @@ namespace {
 		return oss.str();
 	}
 
-	static std::string trim(const std::string& value) {
-		size_t start = value.find_first_not_of(" \t\r\n");
-		if (start == std::string::npos)
-			return "";
-		size_t end = value.find_last_not_of(" \t\r\n");
-		return value.substr(start, end - start + 1);
-	}
-
 	static std::string extensionWithDot(const std::string& path) {
 		size_t slash = path.find_last_of('/');
 		size_t dot = path.find_last_of('.');
 		if (dot == std::string::npos || (slash != std::string::npos && dot < slash))
 			return "";
 		return path.substr(dot);
-	}
-
-	static std::string directoryOf(const std::string& path) {
-		size_t slash = path.find_last_of('/');
-		if (slash == std::string::npos)
-			return ".";
-		if (slash == 0)
-			return "/";
-		return path.substr(0, slash);
-	}
-
-	static std::string fileNameOf(const std::string& path) {
-		size_t slash = path.find_last_of('/');
-		if (slash == std::string::npos)
-			return path;
-		return path.substr(slash + 1);
 	}
 
 	static std::string envHeaderName(const std::string& header) {
@@ -196,8 +177,8 @@ bool CgiHandler::start(const std::string& scriptPath, const Route& route) {
 		::close(outputPipe[0]);
 		::close(outputPipe[1]);
 
-		std::string scriptDir = directoryOf(_scriptPath);
-		std::string scriptName = fileNameOf(_scriptPath);
+		std::string scriptDir = dirName(_scriptPath);
+		std::string scriptName = baseName(_scriptPath);
 		::chdir(scriptDir.c_str());
 
 		char** env = getEnvArray();
@@ -465,14 +446,14 @@ void CgiHandler::parseOutput() {
 	_response.setStatusCode(200);
 
 	while (std::getline(iss, line)) {
-		line = trim(line);
+		line = trimWhitespace(line);
 		if (line.empty())
 			continue;
 		size_t colon = line.find(':');
 		if (colon == std::string::npos)
 			continue;
-		std::string key = trim(line.substr(0, colon));
-		std::string value = trim(line.substr(colon + 1));
+		std::string key = trimWhitespace(line.substr(0, colon));
+		std::string value = trimWhitespace(line.substr(colon + 1));
 		if (key == "Status") {
 			_response.setStatusCode(std::atoi(value.c_str()));
 		} else if (key == "Content-Type") {

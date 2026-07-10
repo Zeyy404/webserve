@@ -13,7 +13,9 @@ namespace HttpUtils {
 	bool		isRegularFile(const std::string& path);
 	std::string	urlDecode(const std::string& value);
 	std::string	trim(const std::string& value);
+	std::string	trimWhitespace(const std::string& value);
 	std::string	baseName(const std::string& path);
+	std::string	dirName(const std::string& path);
 	// Owner encoded in an upload's disk name ("alice~photo.jpg" -> "alice");
 	// names without a '~' belong to "anonymous".
 	std::string	ownerOf(const std::string& diskName);

@@ -68,11 +68,28 @@ std::string trim(const std::string& value) {
 	return value.substr(start, end - start + 1);
 }
 
+std::string trimWhitespace(const std::string& value) {
+	size_t start = value.find_first_not_of(" \t\r\n");
+	if (start == std::string::npos)
+		return "";
+	size_t end = value.find_last_not_of(" \t\r\n");
+	return value.substr(start, end - start + 1);
+}
+
 std::string baseName(const std::string& path) {
 	size_t slash = path.find_last_of('/');
 	if (slash == std::string::npos)
 		return path;
 	return path.substr(slash + 1);
+}
+
+std::string dirName(const std::string& path) {
+	size_t slash = path.find_last_of('/');
+	if (slash == std::string::npos)
+		return ".";
+	if (slash == 0)
+		return "/";
+	return path.substr(0, slash);
 }
 
 std::string ownerOf(const std::string& diskName) {

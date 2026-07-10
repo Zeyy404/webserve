@@ -1,9 +1,12 @@
 #include "../include/HttpRequest.hpp"
+#include "../include/HttpUtils.hpp"
 
 #include <cstdlib>
 #include <sstream>
 #include <algorithm>
 #include <cctype>
+
+using HttpUtils::trimWhitespace;
 
 namespace {
 	static std::string toLowerCase(const std::string& value) {
@@ -13,16 +16,8 @@ namespace {
 		return out;
 	}
 
-	static std::string trim(const std::string& value) {
-		size_t start = value.find_first_not_of(" \t\r\n");
-		if (start == std::string::npos)
-			return "";
-		size_t end = value.find_last_not_of(" \t\r\n");
-		return value.substr(start, end - start + 1);
-	}
-
 	static bool parseHexSize(const std::string& line, size_t& size) {
-		std::string clean = trim(line);
+		std::string clean = trimWhitespace(line);
 		size_t semicolon = clean.find(';');
 		if (semicolon != std::string::npos)
 			clean = clean.substr(0, semicolon);
