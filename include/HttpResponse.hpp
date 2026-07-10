@@ -5,6 +5,11 @@
 # include <map>
 # include "CookieParser.hpp"
 
+// Assembles an HTTP/1.x response: status line, header map, and body. The entity
+// may live in _body OR be served externally from a file (large CGI output) via
+// setExternalBodyLength() — in which case Content-Length reflects the file and
+// the Client streams the bytes itself. build() emits headers+body; buildHead()
+// emits headers only (for HEAD or file-backed streaming).
 class HttpResponse {
 	private:
 	int									_statusCode;

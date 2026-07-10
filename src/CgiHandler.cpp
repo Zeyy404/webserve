@@ -26,6 +26,8 @@ namespace {
 		return oss.str();
 	}
 
+	// Returns the file extension including the leading dot, or "" — a dot that
+	// belongs to a parent directory (before the last slash) does not count.
 	static std::string extensionWithDot(const std::string& path) {
 		size_t slash = path.find_last_of('/');
 		size_t dot = path.find_last_of('.');
@@ -34,6 +36,9 @@ namespace {
 		return path.substr(dot);
 	}
 
+	// Maps an HTTP header name to its CGI meta-variable form: HTTP_ prefix,
+	// uppercased, dashes turned into underscores (e.g. Accept-Encoding ->
+	// HTTP_ACCEPT_ENCODING).
 	static std::string envHeaderName(const std::string& header) {
 		std::string out = "HTTP_";
 		for (size_t i = 0; i < header.size(); ++i) {
@@ -77,6 +82,8 @@ CgiHandler::CgiHandler(const CgiHandler& other) : _request(other._request), _res
 	_bodyStart = other._bodyStart;
 }
 
+// Copies CGI state but not the temp-file fd — _bodyFd is reset to -1 so a copy
+// never closes the original's spilled-body file.
 CgiHandler& CgiHandler::operator=(const CgiHandler& other) {
 	if (this != &other) {
 		_scriptPath = other._scriptPath;
@@ -105,6 +112,8 @@ CgiHandler& CgiHandler::operator=(const CgiHandler& other) {
 	return *this;
 }
 
+// Closes both pipe ends and the spilled-body temp file. Does not reap the
+// child — killProcess()/finish() own that.
 CgiHandler::~CgiHandler() {
 	closeInput();
 	closeOutput();
@@ -112,6 +121,11 @@ CgiHandler::~CgiHandler() {
 }
 
 // CGI execution
+// Resolves the interpreter, builds the environment, then forks and execs the
+// child with stdin/stdout wired to two pipes. The parent keeps the write end of
+// stdin and read end of stdout, both non-blocking. Returns false (having set an
+// error response) if the interpreter is missing/non-executable or a syscall
+// fails; the child's cwd is chdir'd to the script directory before execve.
 bool CgiHandler::start(const std::string& scriptPath, const Route& route) {
 	_scriptPath = scriptPath;
 	_cgiExecutable = getCgiExecutablePath(extensionWithDot(scriptPath), route);
@@ -209,6 +223,10 @@ bool CgiHandler::start(const std::string& scriptPath, const Route& route) {
 	return true;
 }
 
+// Writes one chunk (<=64KB) of the request body to the child's stdin. Closes
+// stdin once the whole body is sent (giving the child EOF) and drops the body
+// buffer. On a write error, reaps the child if it already exited and closes
+// stdin so a dead child doesn't stall the loop; otherwise the write is retried.
 ssize_t CgiHandler::writeInput() {
 	if (!_inputOpen || _inputFd < 0)
 		return 0;
@@ -238,6 +256,11 @@ ssize_t CgiHandler::writeInput() {
 	return bytes;
 }
 
+// Reads one chunk of the child's stdout. Buffers into _output until the CGI
+// header/body separator is found; once the accumulated body exceeds
+// SPILL_THRESHOLD it is flushed to the temp file and subsequent reads append
+// straight to that file, keeping only the header block in memory. Closes the
+// output pipe on EOF (bytes == 0).
 ssize_t CgiHandler::readOutput() {
 	if (!_outputOpen || _outputFd < 0)
 		return 0;
@@ -282,6 +305,8 @@ ssize_t CgiHandler::readOutput() {
 	return bytes;
 }
 
+// Opens a private temp file for the spilled body and immediately unlinks it, so
+// the fd is the only handle and the file vanishes automatically when closed.
 void CgiHandler::openBodyFile() {
 	if (_bodyFd >= 0)
 		return;
@@ -303,6 +328,8 @@ bool CgiHandler::hasBodyFile() const {
 	return _bodyFd >= 0;
 }
 
+// Transfers ownership of the temp-file fd to the caller: clears _bodyFd so this
+// handler won't close it, and reports the body size via the out-param.
 int CgiHandler::releaseBodyFile(size_t& size) {
 	int fd = _bodyFd;
 	size = _bodyBytes;
@@ -310,6 +337,7 @@ int CgiHandler::releaseBodyFile(size_t& size) {
 	return fd;
 }
 
+// Closes the stdin pipe write end, signalling EOF to the child's stdin.
 void CgiHandler::closeInput() {
 	if (_inputFd >= 0)
 		::close(_inputFd);
@@ -324,6 +352,8 @@ void CgiHandler::closeOutput() {
 	_outputOpen = false;
 }
 
+// Non-blocking check that the CGI is fully done: reaps the child if it exited,
+// and reports complete only once both pipes are closed and the child reaped.
 bool CgiHandler::isComplete() {
 	if (_pid > 0 && !_processDone) {
 		pid_t waited = ::waitpid(_pid, &_exitStatus, WNOHANG);
@@ -337,6 +367,8 @@ bool CgiHandler::isTimeout(time_t now, time_t timeout) const {
 	return _pid > 0 && (now - _startTime) > timeout;
 }
 
+// Force-kills the child with SIGKILL, reaps it (blocking) to avoid a zombie,
+// and closes both pipes and the temp file. Safe to call repeatedly.
 void CgiHandler::killProcess() {
 	if (_pid > 0 && !_processDone) {
 		::kill(_pid, SIGKILL);
@@ -351,6 +383,9 @@ void CgiHandler::killProcess() {
 	closeBodyFile();
 }
 
+// Called once the CGI is complete: reaps the child, maps a non-zero exit with
+// no output to a 502, otherwise parses the CGI output into the response and, if
+// the body was spilled, records the temp-file length as the external body size.
 void CgiHandler::finish() {
 	if (_pid > 0 && !_processDone) {
 		pid_t waited = ::waitpid(_pid, &_exitStatus, WNOHANG);
@@ -370,6 +405,7 @@ void CgiHandler::finish() {
 		_response.setExternalBodyLength(_bodyBytes);
 }
 
+// Replaces the response with a gateway error page (504 for timeout, else 502).
 void CgiHandler::setGatewayError(int statusCode) {
 	_response.setStatusCode(statusCode);
 	_response.setContentType("text/html");
@@ -384,6 +420,9 @@ void CgiHandler::setEnvVariable(const std::string& key, const std::string& value
 }
 
 // Private helper methods
+// Builds the CGI/1.1 meta-variable environment: the standard variables (method,
+// URI, script/path info, content length/type, server name/port, remote addr)
+// plus every request header re-exported as an HTTP_* variable.
 void CgiHandler::setupEnvironment(const Route& route) {
 	(void)route;
 	_env.clear();
@@ -424,6 +463,10 @@ void CgiHandler::setupEnvironment(const Route& route) {
 	}
 }
 
+// Splits the CGI output into its header block and body. Honours Status and
+// Content-Type headers, drops Content-Length (recomputed by the response), and
+// forwards the rest. With no header separator the whole output is treated as a
+// text/plain 200 body. The body is moved (swapped) into the response, not copied.
 void CgiHandler::parseOutput() {
 	size_t headerEnd = _output.find("\r\n\r\n");
 	size_t sepLength = 4;
@@ -470,6 +513,8 @@ void CgiHandler::parseOutput() {
 	_response.setBodySwap(_output);
 }
 
+// Flattens _env into a NULL-terminated "KEY=VALUE" array for execve. Caller
+// owns the result and must release it with freeEnvArray.
 char** CgiHandler::getEnvArray() const {
 	char** env = new char*[_env.size() + 1];
 	size_t i = 0;
@@ -527,6 +572,7 @@ void CgiHandler::setRemoteAddr(const std::string& remoteAddr) {
 }
 
 // Static utility methods
+// True if the path's extension is configured as a CGI handler on the route.
 bool CgiHandler::isCgiRequest(const std::string& path, const Route& route) {
 	std::string ext = extensionWithDot(path);
 	return !ext.empty() && route.hasCgiExtension(ext);

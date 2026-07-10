@@ -4,6 +4,10 @@
 # include <string>
 # include <netinet/in.h>
 
+// Thin RAII-ish wrapper around a single listening TCP socket fd. Handles the
+// create/bind/listen sequence with SO_REUSEADDR and non-blocking mode set on
+// creation. Copyable by fd value (no ownership transfer on copy), so the caller
+// must manage which instance actually closes the fd.
 class Socket {
 private:
 	int					_fd;

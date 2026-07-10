@@ -36,6 +36,8 @@ bool SessionController::handles(const std::string& path, const std::string& meth
 	return false;
 }
 
+// Dispatches to the matching handler by path; only called after handles()
+// has confirmed this request targets a session endpoint.
 void SessionController::handle() {
 	if (_request.getPath() == "/session")
 		handleSession();
@@ -48,6 +50,8 @@ void SessionController::handle() {
 }
 
 // Private handler methods
+// GET /session: reports login state by checking the "username" key on the
+// session attached by SessionMiddleware.
 void SessionController::handleSession() {
 	Session* session = _request.getSession();
 
@@ -60,6 +64,9 @@ void SessionController::handleSession() {
 		_response.setBody("Not logged in\n");
 }
 
+// POST /login: requires a urlencoded body with a "username" field, validates
+// it (non-empty, no whitespace, not the reserved "anonymous", filename-safe),
+// stores it on the session, and redirects home (303) in every outcome.
 void SessionController::handleLogin() {
 	std::string contentType = _request.getHeader("content-type");
 	if (contentType.find("application/x-www-form-urlencoded") == std::string::npos) {
@@ -78,6 +85,7 @@ void SessionController::handleLogin() {
 	}
 
 	std::string username = trim(it->second);
+	// Reject anything that could collide with the anonymous bucket or escape the upload path.
 	if (username.empty() || hasWhitespace(username) ||
 		username == "anonymous" || sanitizeFileName(username) != username) {
 		_response.setStatusCode(303);
@@ -101,6 +109,8 @@ void SessionController::handleLogin() {
 	_response.setBody("Successfully logged in\n");
 }
 
+// POST /logout: clears the "username" key so the session reverts to anonymous;
+// reports "Not logged in" if there was nothing to clear. Always redirects home.
 void SessionController::handleLogout() {
 	Session* session = _request.getSession();
 	if (session != NULL) {
@@ -121,6 +131,8 @@ void SessionController::handleLogout() {
 	_response.setBody("Successfully logged out\n");
 }
 
+// GET /my-uploads: renders an HTML list of the uploads owned by the logged-in
+// user, or the "anonymous" bucket when no username is set on the session.
 void SessionController::handleMyUploads() {
 	std::vector<std::string> files;
 	Session* session = _request.getSession();

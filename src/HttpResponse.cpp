@@ -105,6 +105,7 @@ size_t HttpResponse::getExternalBodyLength() const {
 
 // Response building
 std::string HttpResponse::build() {
+	// Content-Length comes from the external file length when file-backed, else _body.
 	setContentLength(hasExternalBody() ? getExternalBodyLength() : _body.size());
 	addHeader("Date", getHttpDate());
 	if (_suppressBody)
@@ -118,6 +119,7 @@ std::string HttpResponse::buildHead() {
 	return buildHeaders();
 }
 
+// Serialises the status line plus every header in _headers into wire format.
 std::string HttpResponse::buildHeaders() {
 	std::ostringstream oss;
 	oss << _httpVersion << " " << _statusCode << " " << _statusMessage << "\r\n";
@@ -155,6 +157,8 @@ void HttpResponse::setLocation(const std::string& location) {
 	addHeader("Location", location);
 }
 
+// Populates the response as an error: uses the supplied error page when non-empty,
+// otherwise renders a minimal generated HTML page for the status code.
 void HttpResponse::buildErrorResponse(int code, const std::string& errorPage) {
 	setStatusCode(code);
 	setContentType("text/html");
@@ -197,6 +201,8 @@ std::string HttpResponse::getStatusMessage(int code) const {
 	}
 }
 
+// Seeds baseline headers; Connection defaults to close and is overridden later
+// when the request is keep-alive.
 void HttpResponse::setDefaultHeaders() {
 	addHeader("Server", "webserv/0.1");
 	addHeader("Connection", "close");

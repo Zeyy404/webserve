@@ -13,6 +13,9 @@ enum LogLevel {
 	FATAL
 };
 
+// Process-wide singleton logger. Emits timestamped, level-tagged lines
+// ("[YYYY-MM-DD HH:MM:SS] [LEVEL] message") to the console and/or a file, and
+// drops anything below the configured minimum level. Not thread-safe.
 class Logger {
 private:
 	static Logger*		_instance;

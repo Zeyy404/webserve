@@ -8,6 +8,10 @@
 # include "Client.hpp"
 # include "Socket.hpp"
 
+// Owns the select()-based event loop: listening sockets, connected clients,
+// and their CGI pipes. Multiplexes all I/O over the master read/write fd_sets,
+// dispatches accept/read/write and CGI phases each tick, and enforces client
+// and CGI timeouts. A given host:port is backed by a single shared listen socket.
 class Server {
 private:
 	std::vector<ServerConfig>		_serverConfigs;

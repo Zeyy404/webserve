@@ -6,6 +6,10 @@
 # include <map>
 # include "Route.hpp"
 
+// Holds the settings of a single server block (listen host/port, server names,
+// error pages, default root/index, client body-size cap) plus its location
+// blocks as Route objects. Provides the request-time route lookups used to pick
+// which Route serves an incoming path.
 class ServerConfig {
 private:
 	std::string							_host;

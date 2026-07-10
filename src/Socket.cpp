@@ -41,12 +41,15 @@ Socket& Socket::operator=(const Socket& other) {
 	return *this;
 }
 
+// Closes the owned fd if still open (fd set to -1 signals ownership was released).
 Socket::~Socket() {
 	if (_fd != -1)
 		close();
 }
 
 // Socket operations
+// Creates the TCP socket, applies SO_REUSEADDR + non-blocking, and fills in the
+// bind address (INADDR_ANY when host is empty/0.0.0.0). Returns false on failure.
 bool Socket::create() {
 	_fd = ::socket(AF_INET, SOCK_STREAM, 0);
 	if (_fd < 0)
@@ -66,12 +69,14 @@ bool Socket::create() {
 	return true;
 }
 
+// Binds the fd to the address set up in create(); returns false if not created or bind fails.
 bool Socket::bind() {
 	if (_fd < 0)
 		return false;
 	return ::bind(_fd, reinterpret_cast<struct sockaddr*>(&_address), sizeof(_address)) == 0;
 }
 
+// Marks the socket as listening with the given backlog; returns false on failure.
 bool Socket::listen(int backlog) {
 	if (_fd < 0)
 		return false;
@@ -81,6 +86,7 @@ bool Socket::listen(int backlog) {
 	return true;
 }
 
+// Closes the fd and resets it to -1 so repeated/destructor closes are no-ops.
 void Socket::close() {
 	if (_fd != -1) {
 		::close(_fd);
@@ -89,12 +95,14 @@ void Socket::close() {
 }
 
 // Private helper methods
+// Non-blocking so accept()/read()/write() never stall the single select() thread.
 void Socket::setNonBlocking() {
 	if (_fd < 0)
 		return;
 	fcntl(_fd, F_SETFL, O_NONBLOCK);
 }
 
+// SO_REUSEADDR so a restart can rebind the port while old connections are in TIME_WAIT.
 void Socket::setSocketOptions() {
 	if (_fd < 0)
 		return;

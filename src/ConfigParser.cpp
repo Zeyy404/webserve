@@ -29,6 +29,10 @@ ConfigParser::~ConfigParser() {
 }
 
 // Parsing
+// Opens the config file (falling back to the default path), reads it top level
+// line by line, and dispatches each "server" block. Accepts both "server {" on
+// one line and "server" followed by "{" on the next. Returns false on any I/O,
+// syntax, or validation failure; true once all blocks parse and validate.
 bool ConfigParser::parse() {
 	if (_configFile.empty())
 		_configFile = getDefaultConfigPath();
@@ -76,6 +80,9 @@ bool ConfigParser::parse() {
 }
 
 // Private parsing helper methods
+// Consumes lines until the matching "}", building one ServerConfig. Lines
+// starting with "location" open a nested location block; everything else is a
+// server-level directive. Throws on an unclosed block or malformed location.
 void ConfigParser::parseServerBlock(std::ifstream& file) {
 	ServerConfig config;
 	std::string line;
@@ -95,7 +102,7 @@ void ConfigParser::parseServerBlock(std::ifstream& file) {
 			if (bracePos == std::string::npos)
 				throw std::runtime_error("Invalid location block");
 
-			std::string path = trim(line.substr(8, bracePos - 8));
+			std::string path = trim(line.substr(8, bracePos - 8)); // text between "location" and "{" is the URI prefix
 			if (path.empty())
 				path = "/";
 			_currentLocationPath = path;
@@ -109,6 +116,8 @@ void ConfigParser::parseServerBlock(std::ifstream& file) {
 	throw std::runtime_error("Unclosed server block");
 }
 
+// Consumes lines until "}", building a Route seeded with the current location
+// path and appending it to the server config. Throws if the block never closes.
 void ConfigParser::parseLocationBlock(std::ifstream& file, ServerConfig& config) {
 	Route route(_currentLocationPath);
 	std::string line;
@@ -128,9 +137,12 @@ void ConfigParser::parseLocationBlock(std::ifstream& file, ServerConfig& config)
 	throw std::runtime_error("Unclosed location block");
 }
 
+// Parses one server-level directive (listen, server_name, root, index,
+// client_max_body_size, error_page) and applies it to the config. Unknown
+// directives are silently ignored; malformed listen values default sanely.
 void ConfigParser::parseDirective(const std::string& line, ServerConfig& config) {
 	std::string clean = trim(line);
-	if (!clean.empty() && clean[clean.size() - 1] == ';')
+	if (!clean.empty() && clean[clean.size() - 1] == ';') // drop the trailing ';' before tokenizing
 		clean = clean.substr(0, clean.size() - 1);
 
 	std::vector<std::string> tokens = split(clean, ' ');
@@ -139,7 +151,7 @@ void ConfigParser::parseDirective(const std::string& line, ServerConfig& config)
 
 	if (tokens[0] == "listen" && tokens.size() >= 2) {
 		std::string value = tokens[1];
-		size_t sep = value.find(':');
+		size_t sep = value.find(':'); // "host:port" vs bare "port"
 		if (sep == std::string::npos)
 			config.setPort(std::atoi(value.c_str()));
 		else {
@@ -157,12 +169,15 @@ void ConfigParser::parseDirective(const std::string& line, ServerConfig& config)
 	} else if (tokens[0] == "client_max_body_size" && tokens.size() >= 2) {
 		config.setClientMaxBodySize(static_cast<size_t>(std::strtoul(tokens[1].c_str(), NULL, 10)));
 	} else if (tokens[0] == "error_page" && tokens.size() >= 3) {
-		std::string page = tokens[tokens.size() - 1];
+		std::string page = tokens[tokens.size() - 1]; // last token is the page; all preceding tokens are status codes
 		for (size_t i = 1; i + 1 < tokens.size(); ++i)
 			config.setErrorPage(std::atoi(tokens[i].c_str()), page);
 	}
 }
 
+// Parses one location-level directive (allowed_methods, root, autoindex, index,
+// upload_path, return, cgi_extension, client_max_body_size) onto the Route.
+// Unknown directives are ignored.
 void ConfigParser::parseRouteDirective(const std::string& line, Route& route) {
 	std::string clean = trim(line);
 	if (!clean.empty() && clean[clean.size() - 1] == ';')
@@ -186,7 +201,7 @@ void ConfigParser::parseRouteDirective(const std::string& line, Route& route) {
 		route.setUploadPath(tokens[1]);
 	} else if (tokens[0] == "return" && tokens.size() >= 3) {
 		int statusCode = std::atoi(tokens[1].c_str());
-		if (statusCode >= 300 && statusCode <= 399)
+		if (statusCode >= 300 && statusCode <= 399) // only 3xx overrides the default redirect code
 			route.setRedirectCode(statusCode);
 		route.setRedirect(tokens[2]);
 	} else if (tokens[0] == "cgi_extension" && tokens.size() >= 3) {
@@ -196,6 +211,9 @@ void ConfigParser::parseRouteDirective(const std::string& line, Route& route) {
 	}
 }
 
+// Strips leading/trailing whitespace and any trailing '#' comment, recursing so
+// whitespace before the stripped comment is removed too. Returns "" for blank
+// or comment-only lines.
 std::string ConfigParser::trim(const std::string& str) {
 	if (str.empty())
 		return "";
@@ -238,6 +256,8 @@ const std::vector<ServerConfig>& ConfigParser::getServerConfigs() const {
 }
 
 // Static utility methods
+// Splits on the delimiter, trimming each piece and dropping empty tokens, so
+// runs of whitespace between directive arguments collapse cleanly.
 std::vector<std::string> ConfigParser::split(const std::string& str, char delimiter) {
 	std::vector<std::string> tokens;
 	std::stringstream ss(str);

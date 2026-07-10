@@ -40,6 +40,8 @@ bool isRegularFile(const std::string& path) {
 	return S_ISREG(st.st_mode);
 }
 
+// Percent-decodes %XX escapes and converts '+' to space (form-encoding rules);
+// malformed or truncated escapes are passed through literally.
 std::string urlDecode(const std::string& value) {
 	std::string out;
 	for (size_t i = 0; i < value.size(); ++i) {
@@ -60,6 +62,8 @@ std::string urlDecode(const std::string& value) {
 	return out;
 }
 
+// Strips leading/trailing whitespace AND double-quotes (for quoted header
+// tokens); use trimWhitespace() when quotes must be preserved.
 std::string trim(const std::string& value) {
 	size_t start = value.find_first_not_of(" \t\r\n\"");
 	if (start == std::string::npos)
@@ -97,6 +101,8 @@ std::string ownerOf(const std::string& diskName) {
 	return tilde == std::string::npos ? "anonymous" : diskName.substr(0, tilde);
 }
 
+// Reduces an untrusted name to its basename and keeps only safe characters
+// (alnum . _ -) to prevent path traversal; empty result falls back to upload.dat.
 std::string sanitizeFileName(const std::string& name) {
 	std::string clean = baseName(name);
 	std::string out;
@@ -117,6 +123,8 @@ std::string joinPath(const std::string& dir, const std::string& file) {
 	return dir + "/" + file;
 }
 
+// Parses application/x-www-form-urlencoded bodies into key/value pairs,
+// url-decoding both sides; pairs without '=' are skipped.
 std::map<std::string, std::string> parseFormBody(const std::string& body) {
 	std::map<std::string, std::string> fields;
 	std::istringstream stream(body);
@@ -140,6 +148,9 @@ bool hasWhitespace(const std::string& value) {
 	return false;
 }
 
+// Sets the response body from the configured error_page for statusCode, trying
+// several path resolutions (as-is, ./, ./www, relative to root); if none opens,
+// falls back to a generated HTML page. Status code must already be set.
 void sendErrorPage(HttpResponse& response, const ServerConfig& config, int statusCode) {
 	std::string errorPath = config.getErrorPage(statusCode);
 	if (!errorPath.empty()) {

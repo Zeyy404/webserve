@@ -7,6 +7,10 @@
 #include "HttpResponse.hpp"
 #include "CookieParser.hpp"
 
+// Ties the HTTP layer to session storage: on the way in it resolves the
+// SESSID cookie to an existing Session (or mints a fresh one) and attaches it
+// to the request; on the way out it emits a Set-Cookie only when the client's
+// session id differs from the one now bound to the request.
 class SessionMiddleware {
 
 private:

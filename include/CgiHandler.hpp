@@ -10,6 +10,12 @@
 # include "HttpResponse.hpp"
 # include "Route.hpp"
 
+// Runs one CGI invocation: forks/execs the interpreter, streams the request
+// body to the child's stdin over a pipe, reads its stdout, and parses the CGI
+// header block into the response. Large output bodies are spilled to an
+// unlink'd temp file (later handed to the owning Client) so the whole entity is
+// never buffered in memory. Owns the child process and pipe fds; copies must
+// not duplicate the temp-file fd, so operator= resets _bodyFd to -1.
 class CgiHandler {
 private:
 	std::string							_scriptPath;

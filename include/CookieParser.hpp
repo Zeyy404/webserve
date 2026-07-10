@@ -5,6 +5,9 @@
 #include <string>
 #include <sstream>
 
+// Two-way cookie helper: splits an inbound Cookie header into a name->value
+// map, and builds outbound Set-Cookie strings. The member fields hold the
+// attributes (Path, Max-Age, HttpOnly, SameSite) stamped onto built cookies.
 class CookieParser {
 
 private:

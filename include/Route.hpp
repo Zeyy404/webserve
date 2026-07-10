@@ -5,6 +5,10 @@
 # include <vector>
 # include <map>
 
+// Represents one location block: the URI prefix it serves plus its allowed
+// methods, root/index, autoindex, redirect, upload path, CGI handlers, and an
+// optional per-route body-size cap. Also answers the matching questions (does a
+// path fall under this location, is a method/CGI extension permitted).
 class Route {
 private:
 	std::string						_path;

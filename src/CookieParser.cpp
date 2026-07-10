@@ -29,6 +29,8 @@ std::string CookieParser::trim(const std::string& s) {
     return s.substr(start, end - start + 1);
 }
 
+// Splits a "Cookie:" header on ';' into name=value pairs, trimming surrounding
+// whitespace; malformed tokens (no '=') and empty names are skipped.
 std::map<std::string, std::string> CookieParser::parse(const std::string& headerValue) {
     std::map<std::string, std::string> cookies;
 
@@ -51,6 +53,8 @@ std::map<std::string, std::string> CookieParser::parse(const std::string& header
     return cookies;
 }
 
+// Assembles a Set-Cookie value, appending the configured attributes; Max-Age
+// is emitted only when non-negative, so the default (-1) yields a session cookie.
 std::string CookieParser::build(const std::string& name, const std::string& value) {
         std::ostringstream oss;
 
@@ -66,6 +70,8 @@ std::string CookieParser::build(const std::string& name, const std::string& valu
         return oss.str();
 }
 
+// Builds a deletion cookie: empty value plus Max-Age=0 tells the browser to
+// drop the named cookie immediately.
 std::string CookieParser::buildExpired(const std::string& name) {
         this->_maxAge   = 0;
         this->_httpOnly = true;

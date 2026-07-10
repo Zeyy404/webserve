@@ -5,6 +5,9 @@
 # include <string>
 # include <vector>
 
+// Process-wide singleton mapping an upload owner (session username, or
+// "anonymous" when not logged in) to that user's list of upload paths. Backs
+// the /my-uploads view. Not thread-safe; suits the single-threaded event loop.
 class FileRegistry {
 
 private:

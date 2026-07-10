@@ -7,6 +7,10 @@
 class HttpResponse;
 class ServerConfig;
 
+// Stateless free-function helpers shared across the HTTP layer: filesystem
+// probes (stat wrappers), path manipulation (baseName/dirName/joinPath),
+// percent-decoding and form parsing, filename sanitisation, and error-page
+// rendering. Note trim() also strips quotes whereas trimWhitespace() does not.
 namespace HttpUtils {
 	bool		pathExists(const std::string& path);
 	bool		isDirectory(const std::string& path);

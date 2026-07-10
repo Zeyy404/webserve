@@ -12,6 +12,11 @@
 
 class CgiHandler;
 
+// Per-request dispatcher: matches the request to a configured Route, then
+// executes GET/HEAD/POST/DELETE against the filesystem (static files,
+// directory listings, redirects, uploads) or delegates to CGI. Holds
+// references to the request/response/config for the lifetime of one request
+// and writes the outcome (body + status code) into the response.
 class RequestHandler {
 private:
 	HttpRequest&		_request;

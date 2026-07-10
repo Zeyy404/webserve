@@ -29,6 +29,9 @@ Client::Client(const Client& other) {
 	*this = other;
 }
 
+// Copies connection state but NOT owned resources: _cgi, _bodyFd and the
+// body-file counters are reset so a copy never double-frees the CGI process or
+// closes another Client's temp-file fd (Clients are stored by value in a map).
 Client& Client::operator=(const Client& other) {
 	if (this != &other) {
 		_fd = other._fd;
@@ -51,6 +54,8 @@ Client& Client::operator=(const Client& other) {
 	return *this;
 }
 
+// Kills any running CGI child and closes the spilled-body temp file. Does NOT
+// close _fd — the socket is owned/closed explicitly via close().
 Client::~Client() {
 	if (_cgi != NULL) {
 		_cgi->killProcess();
@@ -61,6 +66,9 @@ Client::~Client() {
 }
 
 // Client operations
+// One recv into the request parser. Emits an immediate "100 Continue" the first
+// time the client announces Expect: 100-continue so upload bodies flow. Returns
+// bytes read, 0 on peer close, -1 on error (see header for the contract).
 ssize_t Client::read() {
 	char buffer[8192];
 	ssize_t bytes = ::recv(_fd, buffer, sizeof(buffer), 0);
@@ -79,6 +87,10 @@ ssize_t Client::read() {
 	return -1;
 }
 
+// Sends the response in one send() per call, in order: head buffer, then body.
+// The body comes from a temp file (large CGI output) or the in-memory response
+// buffer, never both. Returns bytes sent, 0 when nothing is left to send, -1 on
+// error.
 ssize_t Client::write() {
 	// Headers first (small). One send per call, as select() requires.
 	if (_writeOffset < _writeBuffer.size()) {
@@ -126,6 +138,10 @@ ssize_t Client::write() {
 	return 0;
 }
 
+// Turns a fully-read request into a response: resets prior state, runs session
+// middleware, and either starts a CGI child (kept in _cgi, returns early so the
+// event loop can pump the pipes) or handles the request synchronously. Also
+// fixes the Connection header from the negotiated keep-alive decision.
 void Client::processRequest() {
 	if (_serverConfig == NULL)
 		return;
@@ -170,6 +186,8 @@ void Client::processRequest() {
 		_response.addHeader("Connection", "close");
 }
 
+// Serializes the response head into _writeBuffer, resets the send offsets, and
+// emits the access-log line. Suppresses the body for HEAD requests.
 void Client::prepareResponse() {
 	if (_request.getMethod() == "HEAD")
 		_response.setSuppressBody(true);
@@ -200,6 +218,10 @@ void Client::processCgiOutput() {
 	updateLastActivity();
 }
 
+// Finalizes a completed CGI: parses its output into the response and, if it
+// spilled a large body, takes ownership of the temp file fd so write() can
+// stream it after the handler is destroyed. Then runs response middleware and
+// sets the Connection header.
 void Client::finishCgi() {
 	if (_cgi == NULL)
 		return;
@@ -220,6 +242,8 @@ void Client::finishCgi() {
 		_response.addHeader("Connection", "close");
 }
 
+// Aborts a CGI that exceeded its deadline: kills the child, builds a 504
+// response, and forces the connection closed.
 void Client::failCgiTimeout() {
 	if (_cgi == NULL)
 		return;
@@ -235,6 +259,8 @@ bool Client::isReadComplete() const {
 	return _request.isComplete();
 }
 
+// True once head and body are fully sent, accounting for a suppressed body and
+// for the temp-file vs in-memory body sources.
 bool Client::isWriteComplete() const {
 	if (_writeOffset < _writeBuffer.size())
 		return false;
@@ -245,6 +271,8 @@ bool Client::isWriteComplete() const {
 	return _bodyOffset >= _response.getBody().size();
 }
 
+// Explicit teardown: kills the CGI, closes the temp file, and closes the
+// socket fd (which the destructor deliberately leaves alone).
 void Client::close() {
 	if (_cgi != NULL) {
 		_cgi->killProcess();
@@ -263,6 +291,7 @@ void Client::updateLastActivity() {
 	_lastActivity = std::time(NULL);
 }
 
+// Closes the streamed-body temp file (if open) and resets its counters.
 void Client::closeBodyFile() {
 	if (_bodyFd >= 0)
 		::close(_bodyFd);
@@ -317,6 +346,8 @@ void Client::setFd(int fd) {
 	_fd = fd;
 }
 
+// Also propagates the configured client_max_body_size to the request parser so
+// oversized uploads are rejected during reading.
 void Client::setServerConfig(ServerConfig* config) {
 	_serverConfig = config;
 	if (config != NULL)

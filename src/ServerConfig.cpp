@@ -109,13 +109,15 @@ std::string ServerConfig::getErrorPage(int code) const {
 	return it->second;
 }
 
+// Picks the location whose prefix matches and is longest; on equal length the
+// later-declared route wins (">=" tie-break). Returns NULL if nothing matches.
 Route* ServerConfig::matchRoute(const std::string& path) {
 	Route* best = NULL;
 	size_t bestLength = 0;
 
 	for (size_t i = 0; i < _routes.size(); ++i) {
 		if (_routes[i].matches(path)) {
-			if (_routes[i].getPath().size() >= bestLength) {
+			if (_routes[i].getPath().size() >= bestLength) { // >= so a same-length later route overrides an earlier one
 				best = &_routes[i];
 				bestLength = _routes[i].getPath().size();
 			}
@@ -124,6 +126,9 @@ Route* ServerConfig::matchRoute(const std::string& path) {
 	return best;
 }
 
+// Scans each path segment for a file extension and returns the first route that
+// registers a CGI handler for it. This lets CGI fire on any segment (e.g.
+// /script.php/extra), not just the final one. Returns NULL if none match.
 Route* ServerConfig::matchCgiRoute(const std::string& path) {
 	for (size_t i = 0; i < _routes.size(); ++i) {
 		size_t segStart = 0;
@@ -131,7 +136,7 @@ Route* ServerConfig::matchCgiRoute(const std::string& path) {
 			size_t segEnd = path.find('/', segStart + 1);
 			if (segEnd == std::string::npos)
 				segEnd = path.size();
-			size_t dot = path.rfind('.', segEnd - 1);
+			size_t dot = path.rfind('.', segEnd - 1); // rightmost dot within this segment gives the extension
 			if (dot != std::string::npos && dot > segStart) {
 				std::string ext = path.substr(dot, segEnd - dot);
 				if (_routes[i].hasCgiExtension(ext))

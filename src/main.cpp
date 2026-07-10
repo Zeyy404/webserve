@@ -8,6 +8,9 @@
 
 Server* g_server = NULL;
 
+// Global handle so the async signal handler can reach the running server.
+
+// Graceful shutdown on SIGINT/SIGTERM: stop the server, flush the logger, exit.
 void signalHandler(int signal) {
 	if (signal == SIGINT || signal == SIGTERM) {
 		Logger::getInstance()->info("Received shutdown signal");
@@ -19,6 +22,8 @@ void signalHandler(int signal) {
 	}
 }
 
+// Install shutdown handlers; ignore SIGPIPE so a write to a closed peer
+// returns EPIPE instead of killing the process.
 void setupSignalHandlers() {
 	signal(SIGINT, signalHandler);
 	signal(SIGTERM, signalHandler);
@@ -31,6 +36,8 @@ void printUsage(const char* programName) {
 	std::cout << "                     Default: config/default.conf" << std::endl;
 }
 
+// Entry point: parse args/config, preload upload dirs into the FileRegistry,
+// wire signal handlers, then init and run the server. Returns 1 on fatal error.
 int main(int argc, char* argv[]) {
 	std::string configFile;
 

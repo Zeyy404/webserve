@@ -23,6 +23,7 @@ using HttpUtils::sanitizeFileName;
 using HttpUtils::joinPath;
 
 namespace {
+	// Returns the file extension without the dot (empty if the path has none).
 	static std::string extensionOf(const std::string& path) {
 		size_t dot = path.find_last_of('.');
 		if (dot == std::string::npos)
@@ -30,6 +31,8 @@ namespace {
 		return path.substr(dot + 1);
 	}
 
+	// Maps a known extension to its Content-Type; unknown types fall back to
+	// application/octet-stream so the browser downloads rather than guesses.
 	static std::string mimeFromExt(const std::string& ext) {
 		if (ext == "html" || ext == "htm") return "text/html";
 		if (ext == "css") return "text/css";
@@ -43,12 +46,15 @@ namespace {
 		return "application/octet-stream";
 	}
 
+	// Fallback filename for uploads that carry no name (timestamp-based).
 	static std::string generatedUploadName() {
 		std::ostringstream oss;
 		oss << "upload_" << static_cast<long>(std::time(NULL)) << ".dat";
 		return oss.str();
 	}
 
+	// Extracts the multipart boundary token from a Content-Type header value;
+	// empty string means the request is not multipart/form-data.
 	static std::string boundaryFromContentType(const std::string& contentType) {
 		std::string marker = "boundary=";
 		size_t pos = contentType.find(marker);
@@ -57,6 +63,10 @@ namespace {
 		return trim(contentType.substr(pos + marker.size()));
 	}
 
+	// Scans a multipart body for the first part carrying a filename= header and
+	// writes its name and raw bytes into the out-params. Tolerates both CRLF and
+	// bare-LF separators; returns false if no file part is found or the body is
+	// malformed (leaves out-params untouched on failure).
 	static bool extractMultipartFile(const std::string& body, const std::string& boundary,
 		std::string& filename, std::string& content) {
 		if (boundary.empty())
@@ -65,6 +75,7 @@ namespace {
 		size_t partStart = body.find(delimiter);
 		while (partStart != std::string::npos) {
 			partStart += delimiter.size();
+			// A trailing "--" marks the closing boundary: no more parts to read.
 			if (body.compare(partStart, 2, "--") == 0)
 				return false;
 			if (body.compare(partStart, 2, "\r\n") == 0)
@@ -103,6 +114,9 @@ namespace {
 		return false;
 	}
 
+	// Finds where the URI splits into script-path vs PATH_INFO: walks each path
+	// segment and returns the offset just past the first segment whose extension
+	// is a configured CGI extension. npos means the path invokes no CGI script.
 	static size_t findCgiSplit(const std::string& path, const Route& route) {
 		size_t segStart = 0;
 		while (segStart < path.size()) {
@@ -142,6 +156,10 @@ RequestHandler::~RequestHandler() {
 }
 
 // Main handler
+// Top-level entry point for a non-CGI request. Routes session endpoints first,
+// then handles redirects, method validation (501 unknown / 405 not allowed),
+// and body-size limits (413) before dispatching to the per-method handlers.
+// The outcome is written into _response.
 void RequestHandler::handle() {
 	if (SessionController::handles(_request.getPath(), _request.getMethod())) {
 		SessionController(_request, _response, _config).handle();
@@ -167,6 +185,7 @@ void RequestHandler::handle() {
 	}
 
 	size_t bodyLimit = _config.getClientMaxBodySize();
+	// Route-level limit overrides the server default when the route sets one.
 	if (_route != NULL && _route->hasClientMaxBodySize())
 		bodyLimit = _route->getClientMaxBodySize();
 	if (bodyLimit > 0 && _request.getBody().size() > bodyLimit) {
@@ -184,6 +203,11 @@ void RequestHandler::handle() {
 		handleError(405);
 }
 
+// Decides whether the request targets a CGI script and, if so, forks it.
+// Returns true when a child was started (caller drives its pipes). Returns
+// false when it is not a CGI request (handled stays false) OR a CGI error was
+// already rendered into _response (handled set true, e.g. 502 on spawn fail).
+// Splits the URI into script path + PATH_INFO and populates the CGI env.
 bool RequestHandler::startCgiIfNeeded(CgiHandler& cgi, bool& handled) {
 	handled = false;
 	_route = _config.matchRoute(_request.getPath());
@@ -200,6 +224,7 @@ bool RequestHandler::startCgiIfNeeded(CgiHandler& cgi, bool& handled) {
 	Route* cgiRoute = _config.matchCgiRoute(reqPath);
 	if (cgiRoute == NULL)
 		return false;
+	// HEAD reuses the GET permission for CGI (response body is stripped later).
 	std::string cgiMethod = (_request.getMethod() == "HEAD") ? "GET" : _request.getMethod();
 	if (!cgiRoute->isMethodAllowed(cgiMethod))
 		return false;
@@ -224,12 +249,15 @@ bool RequestHandler::startCgiIfNeeded(CgiHandler& cgi, bool& handled) {
 
 	cgi.setServerPort(_config.getPort());
 	cgi.setScriptName(scriptUri);
+	// No trailing PATH_INFO: point it at the script itself; otherwise resolve
+	// the extra path against the route root (the tester's PATH_INFO contract).
 	if (pathInfo.empty())
 		cgi.setPathInfo(reqPath, scriptPath);
 	else
 		cgi.setPathInfo(pathInfo, root + pathInfo);
 
 	if (!cgi.start(scriptPath, *cgiRoute)) {
+		// Only synthesize 502 if start() did not already set a status (e.g. 404).
 		if (_response.getStatusCode() == 200)
 			handleError(502);
 		return false;
@@ -238,6 +266,9 @@ bool RequestHandler::startCgiIfNeeded(CgiHandler& cgi, bool& handled) {
 }
 
 // Private handler methods
+// Serves GET/HEAD: resolves the URI to a filesystem path (403 if it escapes
+// the root, 404 if missing). Directories yield an autoindex listing when the
+// route enables it, otherwise 403; regular files are streamed as static content.
 void RequestHandler::handleGet() {
 	std::string filePath = resolveFilePath();
 	if (filePath.empty()) {
@@ -264,6 +295,8 @@ void RequestHandler::handleGet() {
 	serveStaticFile(filePath);
 }
 
+// Handles POST as a file upload. Validates the path resolves (403 otherwise),
+// then delegates the body storage to handleFileUpload().
 void RequestHandler::handlePost() {
 	std::string filePath = resolveFilePath();
 	if (filePath.empty()) {
@@ -274,6 +307,9 @@ void RequestHandler::handlePost() {
 	handleFileUpload();
 }
 
+// Deletes an uploaded file. Rejects missing/non-regular targets (404/403) and
+// enforces ownership: a named file's owner (parsed from the disk name) must
+// match the session user, else 403. On success unregisters it and returns 204.
 void RequestHandler::handleDelete() {
 	std::string filePath = resolveFilePath();
 
@@ -315,6 +351,8 @@ void RequestHandler::handleDelete() {
 }
 
 // Private helper methods
+// Reads a file in binary and writes it to the response with a MIME type
+// inferred from its extension; 404 if it cannot be opened.
 void RequestHandler::serveStaticFile(const std::string& path) {
 	std::ifstream file(path.c_str(), std::ios::in | std::ios::binary);
 	if (!file.is_open()) {
@@ -330,6 +368,9 @@ void RequestHandler::serveStaticFile(const std::string& path) {
 	_response.setContentType(mimeFromExt(extensionOf(path)));
 }
 
+// Builds an HTML autoindex page listing directory entries as links. Uses the
+// request path (not the disk path) as the href base so links stay browsable;
+// 403 if the directory cannot be opened.
 void RequestHandler::generateDirectoryListing(const std::string& path) {
 	DIR* dir = opendir(path.c_str());
 	if (dir == NULL) {
@@ -359,6 +400,8 @@ void RequestHandler::generateDirectoryListing(const std::string& path) {
 	_response.setBody(html.str());
 }
 
+// Emits a redirect response using the route's configured code (default 301)
+// and Location header, with a minimal HTML body.
 void RequestHandler::handleRedirect(const std::string& location) {
 	int code = (_route != NULL) ? _route->getRedirectCode() : 301;
 	_response.setStatusCode(code);
@@ -369,6 +412,12 @@ void RequestHandler::handleRedirect(const std::string& location) {
 	_response.setBody(oss.str());
 }
 
+// Stores a POST body as a file under the route's upload dir. Extracts the
+// filename from multipart/form-data when present, otherwise derives one from
+// the URI or a generated name. Files are namespaced by owner ("owner~name");
+// anonymous uploads get a numeric suffix to avoid clobbering. Registers the
+// file for later ownership checks and returns 201 with a Location header.
+// No upload path configured => 200 empty; bad dir or write failure => 500.
 void RequestHandler::handleFileUpload() {
 	if (_route == NULL || _route->getUploadPath().empty()) {
 		_response.setStatusCode(200);
@@ -411,6 +460,7 @@ void RequestHandler::handleFileUpload() {
 			stem = clean.substr(0, dot);
 			ext = clean.substr(dot);
 		}
+		// Anonymous files can't be overwritten by owner, so pick a free suffix.
 		for (int i = 1; pathExists(destination); ++i) {
 			std::ostringstream oss;
 			oss << owner << "~" << stem << "_" << i << ext;
@@ -442,10 +492,16 @@ void RequestHandler::handleFileUpload() {
 	_response.setBody("Uploaded\n");
 }
 
+// Convenience wrapper: URL-decodes the request path then resolves it to disk.
 std::string RequestHandler::resolveFilePath() {
 	return resolveDecodedPath(urlDecode(_request.getPath()));
 }
 
+// Maps a decoded URI to a filesystem path under the effective root (route root
+// overrides server root). Rejects traversal ("..") and NUL bytes by returning
+// "". Strips the route prefix so paths are relative to the route's root, then
+// joins carefully to avoid double/missing slashes. For directories, tries the
+// route's then the server's index files, returning the first that exists.
 std::string RequestHandler::resolveDecodedPath(const std::string& decodedPath) {
 	std::string root = _config.getRoot();
 	if (_route != NULL && !_route->getRoot().empty())
@@ -506,6 +562,8 @@ bool RequestHandler::isAllowedMethod(const std::string& method) {
 }
 
 // Error handling
+// Sets the status and renders the configured error page. For 405 it adds the
+// Allow header listing the route's permitted methods, as HTTP requires.
 void RequestHandler::handleError(int statusCode) {
 	_response.setStatusCode(statusCode);
 	if (statusCode == 405 && _route != NULL) {

@@ -6,6 +6,10 @@
 # include <fstream>
 # include "ServerConfig.hpp"
 
+// Reads an nginx-style configuration file and turns it into a list of
+// ServerConfig objects. Tokenizes line by line, dispatching server-block and
+// location-block directives, then validates the result. Holds transient
+// parsing state (current line, current location path) used only during parse().
 class ConfigParser {
 private:
 	std::string					_configFile;

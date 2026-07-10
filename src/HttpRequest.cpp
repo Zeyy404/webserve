@@ -91,6 +91,9 @@ HttpRequest::~HttpRequest() {
 }
 
 // Parsing
+// One-shot parse of a fully-buffered request (used mainly by tests). Locates the
+// header/body separator, validates the header section, then handles the body per
+// Content-Length or chunked. Returns false only on a hard parse error.
 bool HttpRequest::parse(const std::string& rawRequest) {
 	clear();
 	_rawRequest = rawRequest;
@@ -116,6 +119,8 @@ bool HttpRequest::parse(const std::string& rawRequest) {
 		return false;
 	_headersParsed = true;
 
+	// Reject up front when the declared Content-Length exceeds the limit (chunked
+	// bodies are checked incrementally in parseChunkedBody as they grow).
 	if (_maxBodySize > 0 && !_isChunked && _contentLength > _maxBodySize)
 		return setError(413);
 
@@ -129,6 +134,9 @@ bool HttpRequest::parse(const std::string& rawRequest) {
 	return true;
 }
 
+// Splits the request line from the header lines, parses both, and enforces the
+// HTTP/1.1 mandatory Host header. Returns false (and marks complete) on any
+// malformed line so the caller stops and emits the error code.
 bool HttpRequest::parseHeaderSection(const std::string& headerSection) {
 	size_t lineEnd = headerSection.find("\r\n");
 	size_t lineSep = 2;
@@ -164,6 +172,8 @@ bool HttpRequest::parseHeaderSection(const std::string& headerSection) {
 	return true;
 }
 
+// Marks the request complete once the buffered body reaches Content-Length,
+// trimming any bytes that belong to the next pipelined request.
 void HttpRequest::finalizeBodyIfComplete() {
 	if (_contentLength == 0) {
 		_isComplete = true;
@@ -174,6 +184,10 @@ void HttpRequest::finalizeBodyIfComplete() {
 	}
 }
 
+// Incremental entry point: called once per socket read. Until the header
+// terminator arrives it accumulates into _rawRequest and re-scans for the
+// separator; once headers are parsed it switches to appending body bytes
+// (chunked via parseChunkedBody, otherwise raw until Content-Length is met).
 void HttpRequest::appendData(const std::string& data) {
 	if (_isComplete)
 		return;
@@ -285,6 +299,9 @@ void HttpRequest::clear() {
 }
 
 // Private parsing helpers
+// Validates and splits "METHOD URI VERSION": rejects extra tokens, non-token
+// methods, and non-absolute URIs (400); unknown HTTP/x versions get 505, other
+// malformed version strings 400.
 void HttpRequest::parseRequestLine(const std::string& line) {
 	std::istringstream iss(line);
 	std::string extra;
@@ -306,6 +323,10 @@ void HttpRequest::parseRequestLine(const std::string& line) {
 	parseUri();
 }
 
+// Parses each "Key: Value" line into _headers, rejecting malformed lines,
+// duplicate/whitespace-in-name headers, and embedded CR/LF (400). Enforces that
+// Content-Length and Transfer-Encoding are mutually exclusive, then resolves the
+// effective body framing (_contentLength or _isChunked).
 void HttpRequest::parseHeaders(const std::string& headerSection) {
 	std::istringstream iss(headerSection);
 	std::string line;
@@ -370,6 +391,7 @@ void HttpRequest::parseHeaders(const std::string& headerSection) {
 		if (!_isValid)
 			continue;
 
+		// Store under the lower-cased name so lookups are case-insensitive.
 		_headers[lowerKey] = value;
 	}
 
@@ -536,6 +558,8 @@ bool HttpRequest::hasHeader(const std::string& key) const {
 	return _headers.find(toLowerCase(key)) != _headers.end();
 }
 
+// Connection persistence per HTTP version: 1.1 defaults to keep-alive unless
+// "Connection: close", whereas 1.0 defaults to close unless "keep-alive".
 bool HttpRequest::keepAlive() const {
 	std::string connection = toLowerCase(getHeader("connection"));
 	if (_httpVersion == "HTTP/1.1")

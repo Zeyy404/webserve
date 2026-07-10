@@ -9,6 +9,8 @@
 #include <sstream>
 #include <cstdlib>
 
+// A single server-side session: an arbitrary string key/value store plus a
+// last-accessed timestamp used by SessionManager to expire idle sessions.
 class Session {
 
 private:
@@ -33,8 +35,12 @@ public:
     
 };
 
+// Process-wide singleton owning all live sessions, keyed by session id. It
+// mints ids, hands out pointers into its own map, and lazily evicts sessions
+// idle for longer than TTL. Not thread-safe: assumes the single-process,
+// single-threaded event loop this server runs on.
 class SessionManager {
-    
+
 private:
     
     std::map<std::string, Session> _sessions;

@@ -123,6 +123,7 @@ bool Route::hasCgiExtension(const std::string& ext) const {
 	return _cgiExtensions.find(ext) != _cgiExtensions.end();
 }
 
+// Returns the interpreter path registered for the extension, or "" if none.
 std::string Route::getCgiHandler(const std::string& ext) const {
 	std::map<std::string, std::string>::const_iterator it = _cgiExtensions.find(ext);
 	if (it == _cgiExtensions.end())
@@ -131,7 +132,7 @@ std::string Route::getCgiHandler(const std::string& ext) const {
 }
 
 bool Route::matches(const std::string& requestPath) const {
-	if (_path == "/")
+	if (_path == "/") // "/" is the catch-all location, matches every path
 		return true;
 	if (requestPath.size() < _path.size())
 		return false;
@@ -139,5 +140,5 @@ bool Route::matches(const std::string& requestPath) const {
 		return false;
 	if (requestPath.size() == _path.size())
 		return true;
-	return requestPath[_path.size()] == '/';
+	return requestPath[_path.size()] == '/'; // next char must be '/' so "/kapouet" won't match "/kapouetXYZ"
 }

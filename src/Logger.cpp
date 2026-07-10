@@ -37,6 +37,8 @@ Logger::~Logger() {
 }
 
 // Singleton access
+// Lazily heap-allocates the instance on first use; caller-managed lifetime, so
+// destroy() must be invoked at shutdown to free it (no automatic teardown).
 Logger* Logger::getInstance() {
 	if (_instance == NULL)
 		_instance = new Logger();
@@ -55,6 +57,8 @@ void Logger::setMinLevel(LogLevel level) {
 	_minLevel = level;
 }
 
+// Opens the log file in append mode (closing any previously open one) so
+// existing logs are preserved across runs.
 void Logger::setLogFile(const std::string& filename) {
 	if (_logFile.is_open())
 		_logFile.close();
@@ -70,6 +74,8 @@ void Logger::enableFile(bool enable) {
 }
 
 // Logging methods
+// Central gate: silently discards messages below the configured minimum level;
+// everything else is formatted and written by writeLog.
 void Logger::log(LogLevel level, const std::string& message) {
 	if (level < _minLevel)
 		return;
@@ -118,6 +124,8 @@ std::string Logger::getTimestamp() const {
 	return oss.str();
 }
 
+// Formats the final "[timestamp] [LEVEL] message" line and fans it out to the
+// enabled sinks; the file sink is flushed each write so logs aren't lost on crash.
 void Logger::writeLog(LogLevel level, const std::string& message) {
 	std::string line = "[" + getTimestamp() + "] [" + getLevelString(level) + "] " + message;
 	if (_toConsole)

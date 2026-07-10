@@ -7,6 +7,11 @@
 # include "SessionManager.hpp"
 # include <iostream>
 
+// Parses an HTTP/1.x request incrementally as bytes stream in: feed each read
+// via appendData(), then poll isComplete(). A complete request may still be
+// invalid — always gate on isValid()/getErrorCode() before use. Handles both
+// Content-Length and chunked bodies, enforces size limits, and carries the
+// session binding resolved for the connection.
 class HttpRequest {
 private:
 	std::string							_method;
