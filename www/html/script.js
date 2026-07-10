@@ -58,13 +58,32 @@ document.getElementById('deleteButton').addEventListener('click', async () => {
         resultMessage.textContent = res.ok ? `Deleted "${filePath}"` : `Failed (status ${res.status})`;
         resultMessage.className = `result-message ${res.ok ? 'success' : 'error'}`;
 
-        // Reload the correct list based on if we are logged in
-        const isGlobal = panelTitle.textContent.includes('Global');
-        loadFileOptions(isGlobal ? '/uploads/' : '/my-uploads');
-        // const isGlobal = panelTitle.textContent.includes('Global');
+        // Reload the current session's list (anonymous's files when logged out,
+        // your own when logged in — the only files this session can delete).
         loadFileOptions('/my-uploads');
     } catch (error) {
         resultMessage.textContent = 'Error deleting file';
+        resultMessage.className = 'result-message error';
+    }
+});
+
+// Upload: submit via fetch and, on success, redirect to My Uploads
+// (POST/Redirect/GET, done client-side since only the frontend is editable).
+// The file is stored under the current session — anonymous when logged out —
+// so /my-uploads always shows what was just uploaded.
+const uploadForm = document.getElementById('upload-form');
+uploadForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+        const res = await fetch('/uploads/', { method: 'POST', body: new FormData(uploadForm) });
+        if (res.ok) {
+            window.location.href = '/my-uploads';
+        } else {
+            resultMessage.textContent = `Upload failed (status ${res.status})`;
+            resultMessage.className = 'result-message error';
+        }
+    } catch (error) {
+        resultMessage.textContent = 'Error uploading file';
         resultMessage.className = 'result-message error';
     }
 });
@@ -73,8 +92,8 @@ document.getElementById('deleteButton').addEventListener('click', async () => {
 (async function initSession() {
     const fallbackToGlobal = () => {
         showLoginBtn.classList.remove('hidden');
-        panelTitle.textContent = '🌍 Global Uploads';
-        loadFileOptions('/uploads/');
+        panelTitle.textContent = '🌍 Anonymous Uploads';
+        uploadButton.href = '/my-uploads';
         loadFileOptions('/my-uploads');
     };
 
